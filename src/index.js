@@ -6,8 +6,8 @@ const {
     sortByTimestamp,
     calcGasFees
 } = require('./process');
-const { 
-    toJsonSummary 
+const {
+    toSummary 
 } = require('./report');
 
 async function main() {
@@ -23,6 +23,8 @@ async function main() {
 
     const { 
         etherscanKey, 
+        startBlock,
+        endBlock,
         wallets = [],
         flags = {},
     } = configs;
@@ -41,13 +43,19 @@ async function main() {
         }
         wallets[i] = wallet.toLowerCase();
     }
+    if (startBlock && !utils.isNumeric(startBlock)) {
+        throw new Error('Start block must be numeric');
+    }
+    if (endBlock && !utils.isNumeric(endBlock)) {
+        throw new Error('End block must be numeric');
+    }
 
     // Scan and process txs from user wallets, then format output
-    const txs = await scan(etherscanKey, wallets);
+    const txs = await scan(etherscanKey, wallets, startBlock, endBlock);
     classify(txs, wallets);
     calcGasFees(txs);
     sortByTimestamp(txs);
-    console.log(JSON.stringify(toJsonSummary(txs, flags), null, 4));
+    console.log(toSummary(txs, flags));
 
     // const provider = new ethers.providers.WebSocketProvider(wsEndpoint.startsWith('wss://') ? wsEndpoint : 'wss://' + wsEndpoint);
     // try {

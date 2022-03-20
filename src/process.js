@@ -29,20 +29,23 @@ function classify(txs, wallets) {
         if (tx.isInternal) {
             continue;
         }
-        else {
-            if (tx.isError === '1') {
-                tx.facts.isFail = true;
-            }
-            else if (tx.input === '0x') {
-                tx.facts.classification = wallets.includes(tx.to.toLowerCase()) ? TxClassEnum.INT_TRANSFER : TxClassEnum.EXT_TRANSFER;
+        else if (tx.isError === '1') {
+            tx.facts.isFail = true;
+        }
+        else if (tx.input === '0x') {
+            if (wallets.includes(tx.to.toLowerCase()) && wallets.includes(tx.from.toLowerCase())) {
+                tx.facts.classification = TxClassEnum.INT_TRANSFER;
             }
             else {
-                for (let i = 0; i < KNOWN_FNS.length; ++i) {
-                    if (tx.input.startsWith(KNOWN_IDS[i])) {
-                        tx.facts.classification = TxClassEnum.KNOWN_EXPENSE_FN;
-                        tx.facts.knownFn = KNOWN_FNS[i].split('(')[0];
-                        break;
-                    }
+                tx.facts.classification = TxClassEnum.EXT_TRANSFER;
+            }
+        }
+        else {
+            for (let i = 0; i < KNOWN_FNS.length; ++i) {
+                if (tx.input.startsWith(KNOWN_IDS[i])) {
+                    tx.facts.classification = TxClassEnum.KNOWN_EXPENSE_FN;
+                    tx.facts.knownFn = KNOWN_FNS[i].split('(')[0];
+                    break;
                 }
             }
         }

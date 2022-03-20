@@ -1,7 +1,7 @@
 const ethers = require("ethers");
 const { TxClassEnum } = require('./enums');
 
-function toJsonSummary(txs, flags) {
+function toSummary(txs, flags) {
     if (!Array.isArray(txs) || !flags) {
         throw new Error('Missing txs');
     }
@@ -10,10 +10,12 @@ function toJsonSummary(txs, flags) {
         totalTxCount: txs.length,
         autoReviewTxCount: 0,
         failedTxCount: 0,
+        knownFnTxCount: 0,
         intTransferTxCount: 0,
         manualReviewTxCount: 0,
+        unclassifiedTxCount: 0,
         extTransferTxCount: 0,
-        writeOffExpense: ethers.BigNumber.from(0)
+        gasFees: ethers.BigNumber.from(0)
     };
 
     for (const tx of txs) {
@@ -25,31 +27,26 @@ function toJsonSummary(txs, flags) {
             gasFees,
         } = tx.facts;
 
-        // Adds gas fees for current tx to total expenses
-        const expenseFees = () => {
-            if (flags.expenseGasFees && !isInternal && gasFees) {
-                result.writeOffExpense = result.writeOffExpense.add(gasFees);
-            }
+        // Add gas fees
+        if (!isInternal && gasFees) {
+            result.gasFees = result.gasFees.add(gasFees);
         }
 
         if (isFail) {
             ++result.autoReviewTxCount;
             ++result.failedTxCount;
-            expenseFees();
         }
         else if (classification) {
             switch (classification) {
                 case TxClassEnum.KNOWN_EXPENSE_FN:
-                    expenseFees();
                     ++result.autoReviewTxCount;
+                    ++result.knownFnTxCount;
                     break;
                 case TxClassEnum.INT_TRANSFER:
-                    expenseFees();
                     ++result.autoReviewTxCount;
                     ++result.intTransferTxCount;
                     break;
                 case TxClassEnum.EXT_TRANSFER:
-                    expenseFees();
                     ++result.manualReviewTxCount;
                     ++result.extTransferTxCount;
                     break;
@@ -60,13 +57,22 @@ function toJsonSummary(txs, flags) {
         }
         else {
             ++result.manualReviewTxCount;
+            ++result.unclassifiedTxCount;
         }
     }
 
-    result.writeOffExpense = ethers.utils.formatEther(result.writeOffExpense);
-    return result;
+    return '' +
+        'Total txs: ' + result.totalTxCount + '\n' +
+        'Txs automatically processed: ' + result.autoReviewTxCount + '\n' +
+        '   Failed: ' + result.failedTxCount + '\n' +
+        '   Internal transfers: ' + result.intTransferTxCount + '\n' +
+        '   Known function calls: ' + result.knownFnTxCount + '\n' +
+        'Txs marked for manual review: ' + result.manualReviewTxCount + '\n' +
+        '   Unclassified: ' + result.unclassifiedTxCount + '\n' +
+        '   External transfers: ' + result.extTransferTxCount + '\n' +
+        'Gas fees: ' + ethers.utils.formatEther(result.gasFees);
 }
 
 module.exports = {
-    toJsonSummary
+    toSummary
 };

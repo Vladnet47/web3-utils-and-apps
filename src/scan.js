@@ -1,7 +1,7 @@
 const got = require('got');
 
 // Returns array of all txs for given wallets, both external and internal
-async function scan(etherscanKey, wallets) {
+async function scan(etherscanKey, wallets, startBlock, endBlock) {
     const encounteredHashes = new Set();
     const allTxs = [];
 
@@ -11,7 +11,7 @@ async function scan(etherscanKey, wallets) {
             (async () => {
                 // Scan regular txs
                 try {
-                    const txs = await getRegularTxs(etherscanKey, wallet);
+                    const txs = await getRegularTxs(etherscanKey, wallet, startBlock, endBlock);
                     for (const tx of txs) {
                         if (tx && !encounteredHashes.has(tx.hash)) {
                             allTxs.push({ ...tx, facts: {} });
@@ -27,7 +27,7 @@ async function scan(etherscanKey, wallets) {
             (async () => {
                 // Scan internal txs
                 try {
-                    const txs = await getInternalTxs(etherscanKey, wallet);
+                    const txs = await getInternalTxs(etherscanKey, wallet, startBlock, endBlock);
                     for (const tx of txs) {
                         if (tx && !encounteredHashes.has(tx.hash)) {
                             allTxs.push({ ...tx, facts: { isInternal: true } });
@@ -46,11 +46,13 @@ async function scan(etherscanKey, wallets) {
     return allTxs;
 }
 
-async function getRegularTxs(etherscanKey, address) {
+async function getRegularTxs(etherscanKey, address, startBlock, endBlock) {
     if (!etherscanKey || !address) {
         throw new Error('Missing etherscan key or wallet address');
     }
-    const response = await got.get('https://api.etherscan.io/api?module=account&action=txlist&address=' + address + '&sort=asc&apikey=' + etherscanKey, { 
+    const blockQuery = getBlockQueryStr(startBlock, endBlock);
+    const url = 'https://api.etherscan.io/api?module=account&action=txlist&address=' + address + (blockQuery ? '&' + blockQuery : '') + '&sort=asc&apikey=' + etherscanKey;
+    const response = await got.get(url, { 
         responseType: 'json', 
         timeout: 10000, 
         retry: 0 
@@ -63,11 +65,13 @@ async function getRegularTxs(etherscanKey, address) {
     return txList;
 }
 
-async function getInternalTxs(etherscanKey, address) {
+async function getInternalTxs(etherscanKey, address, startBlock, endBlock) {
     if (!etherscanKey || !address) {
         throw new Error('Missing etherscan key or wallet address');
     }
-    const response = await got.get('https://api.etherscan.io/api?module=account&action=txlistinternal&address=' + address + '&sort=asc&apikey=' + etherscanKey, { 
+    const blockQuery = getBlockQueryStr(startBlock, endBlock);
+    const url = 'https://api.etherscan.io/api?module=account&action=txlistinternal&address=' + address + (blockQuery ? '&' + blockQuery : '') + '&sort=asc&apikey=' + etherscanKey;
+    const response = await got.get(url, { 
         responseType: 'json', 
         timeout: 10000, 
         retry: 0 
@@ -78,6 +82,17 @@ async function getInternalTxs(etherscanKey, address) {
     }
     const txList = body.result;
     return txList;
+}
+
+function getBlockQueryStr(startBlock, endBlock) {
+    let result = '';
+    if (startBlock) {
+        result += 'startblock=' + startBlock;
+    }
+    if (endBlock) {
+        result += (result ? '&' : '') + 'endblock=' + endBlock;
+    }
+    return result;
 }
 
 module.exports = scan;

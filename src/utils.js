@@ -15,7 +15,14 @@ async function writeJson(path, json) {
     await fs.writeFile(path, JSON.stringify(json, null, 4));
 }
 
+function isNumeric(str) {
+    if (str == null) return false;
+    str = str.toString();
+    return !isNaN(str) && !isNaN(parseFloat(str));
+}
+
 module.exports = {
     readJson,
-    writeJson
+    writeJson,
+    isNumeric,
 };
