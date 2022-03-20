@@ -1,22 +1,28 @@
 const ethers = require('ethers');
-const scanTxs = require('./scan-tx');
-const calcWriteOffs = require('./calc-writeoffs');
 const utils = require('./utils');
+const scan = require('./scan');
+const { 
+    identifyWriteOffs,
+    sortByTimestamp,
+    calcGasFees
+} = require('./process');
+const { 
+    toJsonSummary 
+} = require('./format');
 
 async function main() {
     // Read user configs from file
     const jsonPath = process.cwd() + '/configs.json';
-    let json;
+    let configs;
     try {
-        json = await utils.readJson(jsonPath);
+        configs = await utils.readJson(jsonPath);
     }
     catch (err) {
-        console.log('Failed to find configs at ' + jsonPath + ' with error: ' + err.message);
-        return;
+        throw new Error('Failed to read configs at \'' + jsonPath + '\': ' + err.message);
     }
 
     // Validate user configs
-    const { etherscanKey, wallets, wsEndpoint } = json;
+    const { etherscanKey, wallets, wsEndpoint } = configs;
     if (!etherscanKey) {
         throw new Error('Please update etherscanKey');
     }
@@ -33,19 +39,16 @@ async function main() {
     }
 
     const provider = new ethers.providers.WebSocketProvider(wsEndpoint.startsWith('wss://') ? wsEndpoint : 'wss://' + wsEndpoint);
-    const txs = await scanTxs(etherscanKey, wallets);
-    const totalTxCount = txs.length;
-    const { excludedTxs, gasCost } = await calcWriteOffs(provider, txs);
-    const excludedTxCount = excludedTxs.length;
-    console.log('Wrote off ' + (totalTxCount - excludedTxCount) + '/' + totalTxCount + ' txs: ' + ethers.utils.formatEther(gasCost)) + 'Ξ';
-    await provider.destroy();
+    try {
+        let txs = await scan(etherscanKey, wallets);
+        txs = identifyWriteOffs(txs);
+        txs = calcGasFees(txs);
+        txs = sortByTimestamp(txs);
+        console.log(JSON.stringify(toJsonSummary(txs), null, 4));
+    }
+    finally {
+        await provider.destroy();
+    }
 }
 
 main().catch(console.log);
-
-/*
-
-"0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d",
-        "0x6CE34081D4EFC4b7E10B776f618B5e6ad96370F0",
-        "0xC73790870F422350096EF0c19b06DF1C0060d3ca"
-        */
