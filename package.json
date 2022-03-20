@@ -1,0 +1,23 @@
+{
+  "name": "web3-utils",
+  "version": "1.0.0",
+  "description": "Helpful scripts for blockchain interaction",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vladnet47/web3-utils.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Vladnet47/web3-utils/issues"
+  },
+  "homepage": "https://github.com/Vladnet47/web3-utils#readme",
+  "dependencies": {
+    "ethers": "^5.6.1",
+    "got": "^11.8.3"
+  }
+}
