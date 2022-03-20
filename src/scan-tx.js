@@ -1,23 +1,6 @@
-const ethers = require('ethers');
 const got = require('got');
-const utils = require('./utils');
 
-async function main() {
-    // Read configs from json file
-    const jsonPath = process.cwd() + '/configs.json';
-    let json;
-    try {
-        json = await utils.readJson(jsonPath);
-    }
-    catch (err) {
-        console.log('Failed to find configs at ' + jsonPath + ' with error: ' + err.message);
-        return;
-    }
-
-    // Validate user inputs
-    const { etherscanKey, wallets } = json;
-    validateInputs(etherscanKey, wallets);
-
+async function scanTxs(etherscanKey, wallets) {
     const allTxs = [];
 
     // Scan each wallet individually to avoid etherscan rate limit
@@ -53,22 +36,7 @@ async function main() {
         return aTs - bTs;
     });
 
-    const outputPath = process.cwd() + '/out/scan-tx-' + Date.now() + '.json';
-    await utils.writeJson(outputPath, allTxs);
-}
-
-function validateInputs(etherscanKey, wallets) {
-    if (!etherscanKey) {
-        throw new Error('Please update etherscanKey');
-    }
-    if (wallets.length === 0) {
-        throw new Error('Please add at least one valid ethereum address to WALLETS');
-    }
-    for (const wallet of wallets) {
-        if (!ethers.utils.isAddress(wallet)) {
-            throw new Error('Wallet ' + address + ' is not valid format');
-        }
-    }
+    return allTxs;
 }
 
 async function getRegularTxs(etherscanKey, address) {
@@ -105,4 +73,4 @@ async function getInternalTxs(etherscanKey, address) {
     return txList;
 }
 
-module.exports = main;
+module.exports = scanTxs;
