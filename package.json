@@ -2,9 +2,9 @@
   "name": "web3-utils",
   "version": "1.0.0",
   "description": "Helpful scripts for blockchain interaction",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "scan": "node src/index.js" 
   },
   "repository": {
     "type": "git",

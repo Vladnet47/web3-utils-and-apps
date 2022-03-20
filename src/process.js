@@ -1,6 +1,7 @@
 const ethers = require('ethers');
+const { TxClassEnum } = require('./enums');
 
-const WRITEOFF_FNS = [
+const KNOWN_FNS = [
     'setApprovalForAll(address,bool)',
     'registerProxy()',
     'atomicMatch_(address[14],uint256[18],uint8[8],bytes,bytes,bytes,bytes,bytes,bytes,uint8[2],bytes32[5])',
@@ -13,37 +14,35 @@ const WRITEOFF_FNS = [
     'matchERC721UsingCriteria(address,address,address,uint256,bytes32,bytes32[])',
     'matchERC721WithSafeTransferUsingCriteria(address,address,address,uint256,bytes32,bytes32[])'
 ];
-const WRITEOFF_IDS = WRITEOFF_FNS.map(fn => {
+const KNOWN_IDS = KNOWN_FNS.map(fn => {
     const fragment = ethers.utils.Fragment.from('function ' + fn);
     const sig = fragment.format(ethers.utils.FormatTypes.sighash);
     return ethers.utils.id(sig).substring(0,10).toLowerCase();
 });
 
 // If transaction is a failure, transfer, or known write-off function, mark it as written off.
-function identifyWriteOffs(txs) {
-    if (!Array.isArray(txs)) {
+function classify(txs, wallets) {
+    if (!Array.isArray(txs) || !Array.isArray(wallets)) {
         throw new Error('Missing txs');
     }
     for (const tx of txs) {
         if (tx.isInternal) {
             continue;
         }
-        else if (tx.isError === '1') {
-            tx.facts.isWriteOff = true;
-            tx.facts.writeOffReason = 'is fail';
-        }
-        else if (tx.input === '0x') {
-            tx.facts.isWriteOff = true;
-            tx.facts.writeOffReason = 'is transfer';
-        }
         else {
-            // Write off known writeoff transactions
-            for (let i = 0; i < WRITEOFF_IDS.length; ++i) {
-                const fnId = WRITEOFF_IDS[i];
-                if (tx.input.startsWith(fnId)) {
-                    tx.facts.isWriteOff = true;
-                    tx.facts.writeOffReason = 'is known write-off function \'' + WRITEOFF_FNS[i].split('(')[0] + '\'';
-                    break;
+            if (tx.isError === '1') {
+                tx.facts.isFail = true;
+            }
+            else if (tx.input === '0x') {
+                tx.facts.classification = wallets.includes(tx.to.toLowerCase()) ? TxClassEnum.INT_TRANSFER : TxClassEnum.EXT_TRANSFER;
+            }
+            else {
+                for (let i = 0; i < KNOWN_FNS.length; ++i) {
+                    if (tx.input.startsWith(KNOWN_IDS[i])) {
+                        tx.facts.classification = TxClassEnum.KNOWN_EXPENSE_FN;
+                        tx.facts.knownFn = KNOWN_FNS[i].split('(')[0];
+                        break;
+                    }
                 }
             }
         }
@@ -77,7 +76,7 @@ function sortByTimestamp(txs) {
 }
 
 module.exports = {
-    identifyWriteOffs,
+    classify,
     sortByTimestamp,
     calcGasFees,
 };
