@@ -10,7 +10,7 @@ cd web3-utils
 npm install --production
 ```
 
-2) Navigate to project folder and make a file called *configs.json*. [Follow this link](https://etherscan.io/apis) to generate a free Etherscan key.
+2) Navigate to project folder and make a file called *configs.json*. Follow this link to [generate a free Etherscan key](https://etherscan.io/apis).
 
 ```js
 // Example configs.json
