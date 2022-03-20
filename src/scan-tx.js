@@ -105,4 +105,4 @@ async function getInternalTxs(etherscanKey, address) {
     return txList;
 }
 
-main().catch(console.log);
+module.exports = main;
