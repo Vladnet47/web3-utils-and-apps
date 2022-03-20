@@ -26,3 +26,5 @@ npm install --production
 ```bash
 node src/scan-tx.js
 ```
+
+5) If script does not throw any errors, output json can be found in **out/** directory.

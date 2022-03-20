@@ -4,8 +4,7 @@ const utils = require('./utils');
 
 // Wallets to scan
 const WALLETS = [
-    '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d',
-    '0x1D52798dCAd378582Ce1f5fC6607f1Bb070dCe40',
+    //'0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85Ce9',
 ];
 
 async function main() {
