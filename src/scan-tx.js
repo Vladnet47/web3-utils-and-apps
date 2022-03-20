@@ -2,11 +2,6 @@ const ethers = require('ethers');
 const got = require('got');
 const utils = require('./utils');
 
-// Wallets to scan
-const WALLETS = [
-    //'0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85Ce9',
-];
-
 async function main() {
     // Read configs from json file
     const jsonPath = process.cwd() + '/configs.json';
@@ -20,13 +15,13 @@ async function main() {
     }
 
     // Validate user inputs
-    const { etherscanKey } = json;
-    validateInputs(etherscanKey, WALLETS);
+    const { etherscanKey, wallets } = json;
+    validateInputs(etherscanKey, wallets);
 
     const allTxs = [];
 
     // Scan each wallet individually to avoid etherscan rate limit
-    for (const wallet of WALLETS) {
+    for (const wallet of wallets) {
         // Scan regular txs
         try {
             const txs = await getRegularTxs(etherscanKey, wallet);
