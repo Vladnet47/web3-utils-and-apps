@@ -25,7 +25,7 @@ npm install --production
 }
 ```
 
-3) Run the script.
+3) Run the script. If successful, the output csv can be found in *out/* folder.
 
 ```bash
 npm run scan

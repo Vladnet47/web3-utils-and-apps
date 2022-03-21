@@ -1,14 +1,8 @@
 const ethers = require('ethers');
 const utils = require('./utils');
 const scan = require('./scan');
-const { 
-    classify,
-    sortByTimestamp,
-    calcGasFees
-} = require('./process');
-const {
-    toSummary 
-} = require('./report');
+const { classify, sortByTimestamp, calcGasFees } = require('./process');
+const { toSummary, toCsv } = require('./report');
 
 async function main() {
     // Read user configs from file
@@ -55,7 +49,18 @@ async function main() {
     classify(txs, wallets);
     calcGasFees(txs);
     sortByTimestamp(txs);
-    console.log(toSummary(txs, flags));
+
+    const writePath = process.cwd() + '/out/scan_' + Date.now() + '.csv';
+    const csv = toCsv(txs);
+    try {
+        await utils.writeFile(writePath, csv);
+    }
+    catch (err) {
+        throw new Error('Failed to read configs at \'' + jsonPath + '\': ' + err.message);
+    }
+
+    console.log();
+    console.log(toSummary(txs));
 
     // const provider = new ethers.providers.WebSocketProvider(wsEndpoint.startsWith('wss://') ? wsEndpoint : 'wss://' + wsEndpoint);
     // try {
