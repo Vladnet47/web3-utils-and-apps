@@ -1,8 +1,10 @@
 # web3-utils
 
+This script scans transactions from 1 or more user-specified ethereum accounts and exports them as a single csv file.
+
 ## How to run
 
-1) Clone the repo and install dependencies. You must have [Node.js](https://nodejs.org/en/download/) available on your system.
+1) Clone and setup the repo. You must have [Node.js](https://nodejs.org/en/download/) installed on your system.
 
 ```bash
 git clone https://github.com/Vladnet47/web3-utils.git
