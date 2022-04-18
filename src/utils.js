@@ -37,7 +37,7 @@ function tsToString(unixTs){
     const hour = a.getUTCHours();
     const min = a.getUTCMinutes();
     const sec = a.getUTCSeconds();
-    const time = month + ' ' + date + ' ' + year + ' ' + hour + ':' + min + ':' + sec + ' UTC';
+    const time = month + ' ' + date + ' ' + year + ' ' + (hour.length === 1 ? '0' : '') + hour + ':' + (min.length === 1 ? '0' : '') + min + ':' + (sec.length === 1 ? '0' : '') + sec + ' UTC';
     return time;
 }
 
