@@ -75,6 +75,10 @@ class KycManager {
         console.log('Updated kyc address cache in ' + (new Date() - startTime) + 'ms');
     }
 
+    isCached(address) {
+        return this._wallets.has(address.toLowerCase());
+    }
+
     async isKyc(address) {
         if (!address) {
             throw new Error('Missing address');
