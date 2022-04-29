@@ -17,8 +17,12 @@
   },
   "homepage": "https://github.com/Vladnet47/web3-utils#readme",
   "dependencies": {
+    "async-mutex": "^0.3.2",
     "csvtojson": "^2.0.10",
+    "db-schemas": "github:prjctsolaris/db-schemas",
     "ethers": "^5.6.1",
-    "got": "^11.8.3"
+    "got": "^11.8.3",
+    "mongoose": "^6.3.1",
+    "tunnel": "^0.0.6"
   }
 }

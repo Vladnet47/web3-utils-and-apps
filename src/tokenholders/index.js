@@ -1,0 +1,1 @@
+require('./main')().catch(console.log);

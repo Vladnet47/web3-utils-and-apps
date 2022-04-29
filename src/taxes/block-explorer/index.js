@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const csvToJson = require('csvtojson');
 const ethers = require('ethers');
-const { Transaction, TokenTransaction } = require('./txs');
+const { Transaction, TokenTransaction } = require('./csv/txs');
 
 async function group(regDir, erc20Dir, erc721Dir, erc1155Dir) {
     const txs = new Map();
