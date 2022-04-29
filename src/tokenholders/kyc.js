@@ -66,11 +66,13 @@ class KycManager {
     }
 
     async save() {
+        const startTime = new Date();
         let csv = 'addr,kyc\n';
         for (const [addr, kyc] of this._wallets.entries()) {
             csv += addr + ',' + kyc + '\n';
         }
         await fs.promises.writeFile(this._path, csv);
+        console.log('Updated kyc address cache in ' + (new Date() - startTime) + 'ms');
     }
 
     async isKyc(address) {
@@ -81,12 +83,12 @@ class KycManager {
         const addressLc = address.toLowerCase();
         if (this._wallets.has(addressLc)) {
             const kyc = this._wallets.get(addressLc);
-            console.log('Retrieved kyc status from cache in ' + (new Date() - startTime) + 'ms for ' + address + ': ' + kyc);
-            return kyc;
+            //console.log('Retrieved kyc status from cache in ' + (new Date() - startTime) + 'ms for ' + address + ': ' + kyc);
+            return kyc === 'true';
         }
         else {
             const kyc = await this._isKycApi(address);
-            console.log('Retrieved kyc status from api in ' + (new Date() - startTime) + ' for ' + address + ': ' + kyc);
+            //console.log('Retrieved kyc status from api in ' + (new Date() - startTime) + ' for ' + address + ': ' + kyc);
             this._wallets.set(addressLc, kyc);
             return kyc;
         }
@@ -109,7 +111,7 @@ class KycManager {
                 'dnt': '1'
             },
             responseType: 'json',
-            timeout: 7000,
+            timeout: 12000,
             followRedirect: true,
             retry: 0
         };
