@@ -2,7 +2,7 @@ const KycManager = require('./kyc');
 const csvToJson = require('csvtojson');
 
 const MAX_CONCURRENT = 100;
-const HOLDER_PATH = '/home/vdog/workspace/private/web3-utils/src/tokenholders/csv/holders.csv';
+const HOLDER_PATH = '/home/vdog/workspace/private/web3-utils/src/tokenholders/csv/holders4.csv';
 const KYC_PATH = '/home/vdog/workspace/private/web3-utils/src/tokenholders/csv/kyc.csv';
 const DB_HOST = '165.227.185.87';
 const DB_PORT = 31017;
@@ -84,7 +84,7 @@ function updateBucket(buckets, tokenCount) {
 }
 
 function printBuckets(buckets) {
-    console.log('----- Count Summary -----');
+    console.log('----- Wallets with KYC that have APE -----');
     let total = 0;
     for (let i = 0; i < buckets.length; ++i) {
         const count = buckets[i];
@@ -100,9 +100,9 @@ function printBuckets(buckets) {
     console.log('Total: ' + total);
     console.log();
 
-    console.log('----- Mint Per Wave -----');
+    console.log('----- Max tokens minted per wave -----');
     console.log('Wave 1: ' + (buckets[1] + buckets[2] * 2 + buckets[3] * 2 + buckets[4] * 2 + buckets[5] * 2 + buckets[6] * 2));
-    console.log('Wave 1: ' + (buckets[3] + buckets[4] * 2 + buckets[5] * 3 + buckets[6] * 4));
+    console.log('Wave 2: ' + (buckets[3] + buckets[4] * 2 + buckets[5] * 3 + buckets[6] * 4));
 }
 
 module.exports = main;
