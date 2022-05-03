@@ -26,9 +26,16 @@ async function main() {
 
     const signer = new ethers.Wallet(privateKey, provider);
 
+    let balance;
     while (true) {
-        const balance = await signer.getBalance();
-        console.log('Current balance is ' + ethers.utils.formatEther(balance));
+        try {
+            balance = await signer.getBalance();
+            console.log('Current balance is ' + ethers.utils.formatEther(balance));
+        }
+        catch (err) {
+            console.log('Failed to get balance: ' + err.message);
+            continue;
+        }
 
         if (balance.gt(TARGET_BAL)) {
             try {
