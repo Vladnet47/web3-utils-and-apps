@@ -1,5 +1,5 @@
 const ethers = require('ethers');
-const { createTx, printTx, encodeTx, encodeTxData, getAlchemyHttpsProv, readConfigs } = require('../../src');
+const { createTx, printTx, encodeTx, encodeTxData, getAlchemyHttpsProv, readConfigs } = require('../../../utils');
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
 

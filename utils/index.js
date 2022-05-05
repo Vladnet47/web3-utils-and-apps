@@ -4,6 +4,7 @@ module.exports = {
     ...require('./file'),
     ...require('./mongo'),
     ...require('./blockchain'),
+    ...require('./notify'),
     //...require('./flashbots'),
     //...require('./api'),
 };

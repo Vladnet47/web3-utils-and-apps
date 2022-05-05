@@ -1,4 +1,4 @@
-const { streamConfirmedTxs, printTx } = require('../../src');
+const { streamPendingTxs, printTx } = require('../../../utils');
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
 
@@ -7,7 +7,7 @@ async function main() {
     const cb = async tx => {
         printTx(tx);
     }
-    const close = await streamConfirmedTxs(address, cb);
+    const close = await streamPendingTxs(address, cb);
     //await close();
 }
 

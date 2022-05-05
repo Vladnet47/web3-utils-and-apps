@@ -1,4 +1,4 @@
-const { streamFullBlocks, printTx } = require('../../src');
+const { streamFullBlocks, printTx } = require('../../../utils');
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
 
