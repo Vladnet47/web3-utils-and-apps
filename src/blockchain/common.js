@@ -114,9 +114,10 @@ function printTx(tx = {}) {
     }
     console.log(JSON.stringify({
         ...tx,
-        maxFeePerGas: ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei'),
-        maxPriorityFeePerGas: ethers.utils.formatUnits(tx.maxPriorityFeePerGas, 'gwei'),
-        value: ethers.utils.formatEther(tx.value),
+        gasPrice: tx.gasPrice ? ethers.utils.formatUnits(tx.gasPrice, 'gwei') : null,
+        maxFeePerGas: tx.maxFeePerGas ? ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei') : null,
+        maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? ethers.utils.formatUnits(tx.maxPriorityFeePerGas, 'gwei') : null,
+        value: tx.value ? ethers.utils.formatEther(tx.value) : '0',
     }, null, 2));
 }
 

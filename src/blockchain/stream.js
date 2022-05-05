@@ -13,6 +13,7 @@ async function streamPendingTxs(address, callback) {
     if (!address) {
         throw new Error('Missing address');
     }
+    address = address.toLowerCase();
     const endpoint = (await file.readConfigs()).endpoints.alchemy;
     const webs = new ws.WebSocket('wss://' + endpoint);
 
@@ -23,10 +24,12 @@ async function streamPendingTxs(address, callback) {
     webs.on('message', async txStr => {
         if (txStr) {
             const json = JSON.parse(txStr.toString());
-            if (json.params.result) {
+            if (json && json.params && json.params.result) {
                 const tx = json.params.result;
                 await callback({
-                    ...tx,
+                    hash: tx.hash,
+                    from: tx.from,
+                    to: tx.to,
                     data: tx.input != null ? tx.input : tx.data,
                     value: tx.value ? ethers.BigNumber.from(tx.value) : null,
                     gasPrice: tx.gasPrice ? ethers.BigNumber.from(tx.gasPrice) : null,
@@ -34,15 +37,20 @@ async function streamPendingTxs(address, callback) {
                     maxFeePerGas: tx.maxFeePerGas ? ethers.BigNumber.from(tx.maxFeePerGas) : null,
                     gasLimit: tx.gas ? parseInt(tx.gas, 16) : null,
                     type: parseInt(tx.type, 16),
+                    nonce: tx.nonce,
                     chainId: parseInt(tx.chainId, 16),
                     nonce: parseInt(tx.nonce, 16),
-                    v: parseInt(tx.v, 16)
+                    v: parseInt(tx.v, 16),
+                    r: tx.r,
+                    s: tx.s,
+                    accessList: tx.accessList,
                 });
             }
         }
     });
 
-    return webs.close;
+    console.log('Started streaming pending txs for ' + address);
+    return async () => webs.close();
 }
 
 // Starts monitoring new block numbers.
@@ -83,7 +91,7 @@ async function streamFullBlocks(callback, chainId) {
         if (bn) {
             let block;
             try {
-                block = await prov.getBlock(bn);
+                block = await prov.getBlockWithTransactions(bn);
             }
             catch (err) {
                 console.log('Failed to retrieve full block: ' + err.message);
@@ -104,6 +112,29 @@ async function streamFullBlocks(callback, chainId) {
     return prov.destroy;
 }
 
+// Starts monitoring confirmed hashes.
+// Whenever encountered, calls callback.
+// Uses alchemy http provider.
+async function streamConfirmedHashes(address, callback, chainId) {
+    if (!callback) {
+        throw new Error('Missing callback');
+    }
+    if (!address) {
+        throw new Error('Missing address');
+    }
+    address = address.toLowerCase();
+    const prov = await common.getAlchemyHttpProv(chainId);
+
+    prov.on({ address }, async tx => {
+        if (tx && tx.transactionHash) {
+            await callback(tx.transactionHash);
+        }
+    });
+
+    console.log('Started monitoring confirmed tx hashes for ' + address);
+    return prov.destroy;
+}
+
 // Starts monitoring confirmed txs.
 // Whenever encountered, calls callback.
 // Uses alchemy http provider.
@@ -114,28 +145,29 @@ async function streamConfirmedTxs(address, callback, chainId) {
     if (!address) {
         throw new Error('Missing address');
     }
-    const prov = common.getAlchemyHttpProv(chainId);
+    address = address.toLowerCase();
 
-    prov.on({ address }, async tx => {
-        if (tx) {
-            await callback({
-                ...tx,
-                value: tx.value ? ethers.BigNumber.from(tx.value) : null,
-                gasPrice: tx.gasPrice ? ethers.BigNumber.from(tx.gasPrice) : null,
-                maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? ethers.BigNumber.from(tx.maxPriorityFeePerGas) : null,
-                maxFeePerGas: tx.maxFeePerGas ? ethers.BigNumber.from(tx.maxFeePerGas) : null,
-                gasLimit: tx.gasLimit ? parseInt(tx.gasLimit, 16) : null,
-            });
+    const cb = async block => {
+        const tasks = [];
+        for (const tx of block.transactions) {
+            if (tx.to && tx.to.toLowerCase() === address) {
+                tx.gasLimit = tx.gasLimit.toString();
+                tasks.push(callback(tx));
+            }
         }
-    });
+        await Promise.all(tasks);
+    }
 
-    console.log('Started monitoring confirmed transaction');
-    return prov.destroy;
+    const close = await streamFullBlocks(cb, chainId);
+
+    console.log('Started monitoring confirmed txs for ' + address);
+    return close;
 }
 
 module.exports = {
     streamPendingTxs,
     streamBlocks,
     streamFullBlocks,
-    streamConfirmedTxs
+    streamConfirmedHashes,
+    streamConfirmedTxs,
 };
