@@ -1,4 +1,5 @@
 const ethers = require('ethers');
+const got = require('got');
 const file = require('../file');
 
 async function getAlchemyWsProv(chainId) {
@@ -215,6 +216,29 @@ async function getAddressDetails(provider, address) {
     };
 }
 
+async function getContractAbi(etherscanKey, address) {
+    if (!etherscanKey) {
+        throw new Error('Missing etherscan key');
+    }
+    if (!ethers.utils.isAddress(address)) {
+        throw new Error('Missing address');
+    }
+    const response = await got.get('https://api.etherscan.io/api?module=contract&action=getabi&address=' + address + '&apikey=' + etherscanKey, { 
+        responseType: 'json', 
+        timeout: 6000, 
+        retry: 0 
+    });
+    const body = response.body;
+    if (body.status !== '1') {
+        throw new Error('Failed to retrieve contract abi: ' + body.message);
+    }
+    const abi = body.result;
+    if (!abi || abi === 'Contract source code not verified') {
+        throw new Error('Contract is not verified');
+    }
+    return JSON.parse(abi);
+}
+
 
 module.exports = {
     getAlchemyWsProv,
@@ -235,4 +259,5 @@ module.exports = {
     encodeTx,
     encodeTxData,
     getAddressDetails,
+    getContractAbi,
 };
