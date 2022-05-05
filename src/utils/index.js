@@ -1,6 +1,9 @@
 module.exports = {
+    RequestModule: require('./request-module'),
     ...require('./common'),
     ...require('./file'),
     ...require('./mongo'),
-    ...require('./requests'),
+    ...require('./blockchain'),
+    //...require('./flashbots'),
+    //...require('./api'),
 };

@@ -57,8 +57,11 @@ async function existsFile(path) {
     }
 }
 
-async function readDefaultConfigs() {
-    return await readJson(__dirname + '/default-configs.json');
+async function readConfigs() {
+    if (!process.env.PATH_TO_CONFIGS) {
+        throw new Error('Missing PATH_TO_CONFIGS env');
+    }
+    return await readJson(process.env.PATH_TO_CONFIGS);
 }
 
 module.exports = {
@@ -67,5 +70,5 @@ module.exports = {
     readCsv,
     writeCsv,
     existsFile,
-    readDefaultConfigs,
+    readConfigs,
 };

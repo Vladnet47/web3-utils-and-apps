@@ -1,40 +1,50 @@
 const ethers = require('ethers');
-const file = require('./file');
+const file = require('../file');
 
 async function getAlchemyWsProv(chainId) {
-    return await getWsProv((await file.readDefaultConfigs()).endpoints.alchemy, chainId);
+    return await getWsProv((await file.readConfigs()).endpoints.alchemy, chainId);
 }
 
 async function getAlchemyHttpProv(chainId) {
-    return await getHttpProv((await file.readDefaultConfigs()).endpoints.alchemy, chainId);
+    return await getHttpProv((await file.readConfigs()).endpoints.alchemy, chainId);
 }
 
 async function getAlchemyHttpsProv(chainId) {
-    return await getHttpsProv((await file.readDefaultConfigs()).endpoints.alchemy, chainId);
+    return await getHttpsProv((await file.readConfigs()).endpoints.alchemy, chainId);
 }
 
 async function getZmokWsProv(chainId) {
-    return await getWsProv((await file.readDefaultConfigs()).endpoints.zmok, chainId);
+    return await getWsProv((await file.readConfigs()).endpoints.zmok, chainId);
 }
 
 async function getZmokHttpProv(chainId) {
-    return await getHttpProv((await file.readDefaultConfigs()).endpoints.zmok, chainId);
+    return await getHttpProv((await file.readConfigs()).endpoints.zmok, chainId);
 }
 
 async function getZmokHttpsProv(chainId) {
-    return await getHttpsProv((await file.readDefaultConfigs()).endpoints.zmok, chainId);
+    return await getHttpsProv((await file.readConfigs()).endpoints.zmok, chainId);
 }
 
 async function getNftyWsProv(chainId) {
-    return await getWsProv((await file.readDefaultConfigs()).endpoints.nftyWs, chainId);
+    return await getWsProv((await file.readConfigs()).endpoints.nftyWs, chainId);
 }
 
 async function getNftyHttpProv(chainId) {
-    return await getHttpProv((await file.readDefaultConfigs()).endpoints.nftyHttp, chainId);
+    return await getHttpProv((await file.readConfigs()).endpoints.nftyHttp, chainId);
 }
 
 async function getNftyHttpsProv(chainId) {
-    return await getHttpsProv((await file.readDefaultConfigs()).endpoints.nftyHttp, chainId);
+    return await getHttpsProv((await file.readConfigs()).endpoints.nftyHttp, chainId);
+}
+
+async function getEtherscanProv(chainId) {
+    const etherscan = (await file.readConfigs()).etherscan;
+    if (!etherscan) {
+        throw new Error('Missing etherscan key');
+    }
+    const prov = new ethers.providers.EtherscanProvider(chainId, etherscan);
+    await prov.ready;
+    return prov;
 }
 
 async function getWsProv(endpoint, chainId) {
@@ -43,6 +53,7 @@ async function getWsProv(endpoint, chainId) {
     }
     const provider = new ethers.providers.WebSocketProvider('ws://' + endpoint, chainId);
     await provider.ready;
+    console.log('Connected to ws provider');
     return provider;
 }
 
@@ -52,6 +63,7 @@ async function getHttpProv(endpoint, chainId) {
     }
     const provider = new ethers.providers.JsonRpcProvider('http://' + endpoint, chainId);
     await provider.ready;
+    console.log('Connected to http provider');
     return provider;
 }
 
@@ -61,6 +73,7 @@ async function getHttpsProv(endpoint, chainId) {
     }
     const provider = new ethers.providers.JsonRpcProvider('https://' + endpoint, chainId);
     await provider.ready;
+    console.log('Connected to https provider');
     return provider;
 }
 
@@ -172,7 +185,7 @@ function encodeTxData(fnSig, params) {
 }
 
 // Returns address balance and nonce
-function getWalletDetails(provider, address) {
+async function getAddressDetails(provider, address) {
     if (!provider) {
         throw new Error('Missing provider');
     }
@@ -189,45 +202,6 @@ function getWalletDetails(provider, address) {
     };
 }
 
-// Starts monitoring pending txs from provided address.
-// Whenever encountered, calls callback.
-// Uses alchemy ws provider.
-async function monitorPendingTxs(address, callback, chainId) {
-    return provider.destroy;
-}
-
-// Starts monitoring new block numbers.
-// Whenever encountered, calls callback.
-// Uses zmok http provider.
-async function monitorBlocks(callback, chainId) {
-    const prov = await getZmokHttpProv(chainId);
-    prov.on('block', bn => {
-        if (bn) {
-            callback(bn);
-        }
-    });
-    return prov.destroy;
-}
-
-// Starts monitoring new full blocks.
-// Whenever encountered, calls callback.
-// Uses alchemy http provider.
-async function monitorFullBlocks(callback, chainId) {
-    const prov = await getAlchemyHttpProv(chainId);
-    prov.on('block', async bn => {
-        if (bn) {
-            callback(await prov.getBlock(bn));
-        }
-    });
-    return prov.destroy;
-}
-
-// Starts monitoring confirmed txs.
-// Whenever encountered, calls callback.
-// Uses alchemy http provider.
-async function monitorConfirmedTxs(address, callback, chainId) {
-    return provider.destroy;
-}
 
 module.exports = {
     getAlchemyWsProv,
@@ -239,6 +213,7 @@ module.exports = {
     getNftyWsProv,
     getNftyHttpProv,
     getNftyHttpsProv,
+    getEtherscanProv,
     getWsProv,
     getHttpProv,
     getHttpsProv,
@@ -246,9 +221,5 @@ module.exports = {
     printTx,
     encodeTx,
     encodeTxData,
-    getWalletDetails,
-    monitorPendingTxs,
-    monitorConfirmedTxs,
-    monitorBlocks,
-    monitorFullBlocks
+    getAddressDetails,
 };

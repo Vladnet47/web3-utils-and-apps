@@ -20,12 +20,6 @@ class RequestModule {
         }
     }
 
-    async _ensureProxy() {
-        if (this._useProxy && !this._loaded) {
-            await this.load();
-        }
-    }
-
     async get(url, headers, type, timeout) {
         if (!url) {
             throw new Error('Missing url');
@@ -83,7 +77,7 @@ class RequestModule {
             retry: 0
         };
         
-        const proxy = await this._getNextProxy();
+        const proxy = await this._nextProxy();
         if (proxy) {
             req.agent = { https: tunnel.httpsOverHttp({ proxy }) };
         }
@@ -107,7 +101,7 @@ class RequestModule {
         };
     }
 
-    _nextProxy() {
+    async _nextProxy() {
         const release = await this._proxyMutex.acquire();
         try {
             await this._ensureProxy();
@@ -122,6 +116,13 @@ class RequestModule {
             release();
         }
     }
+
+    async _ensureProxy() {
+        if (this._useProxy && !this._loaded) {
+            await this.load();
+            this._loaded = true;
+        }
+    }
     
     _formatProxy(proxy) {
         if (!proxy || !proxy.host || !proxy.port) {
@@ -133,6 +134,4 @@ class RequestModule {
     }
 }
 
-module.exports = {
-    RequestModule
-};
+module.exports = RequestModule;
