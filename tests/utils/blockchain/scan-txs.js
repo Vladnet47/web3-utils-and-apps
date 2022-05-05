@@ -1,4 +1,4 @@
-const { scanTxs } = require('../../../utils');
+const { scanTxs } = require('../../../src/utils');
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
 

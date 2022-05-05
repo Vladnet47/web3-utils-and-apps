@@ -1,4 +1,4 @@
-const { streamConfirmedTxs, printTx } = require('../../../utils');
+const { streamConfirmedTxs, printTx } = require('../../../src/utils');
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
 
