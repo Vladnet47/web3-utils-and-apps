@@ -50,7 +50,10 @@ async function streamPendingTxs(address, callback) {
     });
 
     console.log('Started streaming pending txs for ' + address);
-    return async () => webs.close();
+    return async () => {
+        webs.close();
+        console.log('Closed pending tx stream');
+    };
 }
 
 // Starts monitoring new block numbers.
@@ -75,7 +78,10 @@ async function streamBlocks(callback, chainId) {
     });
 
     console.log('Started monitoring block numbers');
-    return prov.destroy;
+    return async () => {
+        await prov.destroy();
+        console.log('Closed block number stream');
+    };
 }
 
 // Starts monitoring new full blocks.
@@ -109,7 +115,10 @@ async function streamFullBlocks(callback, chainId) {
     });
 
     console.log('Started monitoring full blocks');
-    return prov.destroy;
+    return async () => {
+        await prov.destroy();
+        console.log('Closed full block stream');
+    };
 }
 
 // Starts monitoring confirmed hashes.
@@ -132,7 +141,10 @@ async function streamConfirmedHashes(address, callback, chainId) {
     });
 
     console.log('Started monitoring confirmed tx hashes for ' + address);
-    return prov.destroy;
+    return async () => {
+        await prov.destroy();
+        console.log('Closed confirmed tx hash stream');
+    };
 }
 
 // Starts monitoring confirmed txs.
@@ -161,7 +173,10 @@ async function streamConfirmedTxs(address, callback, chainId) {
     const close = await streamFullBlocks(cb, chainId);
 
     console.log('Started monitoring confirmed txs for ' + address);
-    return close;
+    return async () => {
+        await close();
+        console.log('Closed confirmed tx stream');
+    };
 }
 
 module.exports = {

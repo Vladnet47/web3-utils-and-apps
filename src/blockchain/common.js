@@ -79,8 +79,8 @@ async function getHttpsProv(endpoint, chainId) {
 
 // Creates new eip1559 transaction
 // All values are in pre-processed state (fees in gwei, )
-function createTx(to, max, prio, limit, value, data, nonce) {
-    if (!to) {
+function createTx(to, max, prio, limit, value, data, nonce, type) {
+    if (!ethers.utils.isAddress(to)) {
         throw new Error('Missing to address');
     }
     if (!max) {
@@ -89,19 +89,28 @@ function createTx(to, max, prio, limit, value, data, nonce) {
     if (!limit || limit < 21000) {
         throw new Error('Missing or invalid gas limit');
     }
-    if (!nonce || nonce < 0) {
+    if (nonce == null || nonce < 0) {
         throw new Error('Missing or invalid nonce');
+    }
+    if (type != null) {
+        if (type !== 0 && type !== 2) {
+            throw new Error('Type must be 0 or 2');
+        }
+    }
+    else {
+        type = 2;
     }
     max = ethers.utils.parseUnits(max.toString(), 'gwei');
     value = value ? ethers.utils.parseEther(value.toString()) : ethers.BigNumber.from(0);
     return {
         to,
+        gasPrice: max,
         maxFeePerGas: max,
-        maxPriorityFeePerGas: prio ? ethers.utils.parseUnits(prio, 'gwei') : max,
+        maxPriorityFeePerGas: prio ? ethers.utils.parseUnits(prio.toString(), 'gwei') : max,
         gasLimit: limit,
         value,
-        type: 2,
-        data: data  || '0x',
+        type: type == null ? 2 : type,
+        data: data || '0x',
         chainId: 1,
         nonce,
     };
@@ -123,12 +132,15 @@ function printTx(tx = {}) {
 
 // Encodes transaction
 function encodeTx(tx = {}) {
-    if (!tx || tx.type == null) {
+    if (!tx) {
         throw new Error('Missing tx');
+    }
+    if (tx.type == null) {
+        throw new Error('Missing tx type');
     }
 
     let serialized;
-    if (tx.type === 2) {
+    if (tx.type === 0) {
         serialized = ethers.utils.serializeTransaction({
             to: tx.to,
             data: tx.data,
@@ -172,13 +184,13 @@ function encodeTx(tx = {}) {
 
 // Encodes transaction data
 function encodeTxData(fnSig, params) {
-    if (!fnSig || !fnSig.includes('(') || !fnSig.includes(')') || !fnSig.endsWith(')')) {
+    if (!fnSig || !fnSig.includes('(') || !fnSig.includes(')')) {
         throw new Error('Missing or invalid function signature');
     }
     const abi = [(fnSig.startsWith('function') ? '' : 'function ') + fnSig];
     const iface = new ethers.utils.Interface(abi);
     try {
-        return iface.encodeFunctionData(fn, params);
+        return iface.encodeFunctionData(fnSig, params);
     }
     catch (err) {
         throw new Error('Invalid parameters for function signature: ' + err.message);

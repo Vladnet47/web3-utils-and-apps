@@ -41,7 +41,7 @@ async function scanTxs(address, callback, chainId) {
     }
 
     return async () => {
-        console.log('Closed tx scan provider');
+        console.log('Closed tx scanner');
     };
 }
 
