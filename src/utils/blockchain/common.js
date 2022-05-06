@@ -198,6 +198,21 @@ function encodeTxData(fnSig, params) {
     }
 }
 
+function getTxCost(tx) {
+    if (!tx) {
+        throw new Error('Missing tx');
+    }
+    if (tx.type == null) {
+        throw new Error('Missing tx type');
+    }
+    if (tx.type === 2) {
+        return tx.maxFeePerGas.add(tx.maxPriorityFeePerGas).add(tx.value);
+    }
+    else {
+        return tx.gasPrice.add(tx.value);
+    }
+}
+
 // Returns address balance and nonce
 async function getAddressDetails(provider, address) {
     if (!provider) {
@@ -257,6 +272,7 @@ module.exports = {
     createTx,
     printTx,
     encodeTx,
+    getTxCost,
     encodeTxData,
     getAddressDetails,
     getContractAbi,
