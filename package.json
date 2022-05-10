@@ -4,7 +4,7 @@
   "description": "Helpful scripts for blockchain interaction",
   "main": "src/index.js",
   "scripts": {
-    "holders": "NODE_OPTIONS=--max-old-space-size=4096 node src/yuga/tokenholders/index.js"
+    "looks-prod": "NODE_OPTIONS=--max-old-space-size=4096 PATH_TO_CONFIGS= node src/apps/looks-farmer/index.js"
   },
   "repository": {
     "type": "git",

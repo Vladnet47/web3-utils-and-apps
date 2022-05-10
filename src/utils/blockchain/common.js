@@ -221,10 +221,10 @@ function getTxCost(tx) {
         throw new Error('Missing tx type');
     }
     if (tx.type === 2) {
-        return tx.maxFeePerGas.add(tx.maxPriorityFeePerGas).add(tx.value);
+        return tx.maxFeePerGas.add(tx.maxPriorityFeePerGas).mul(tx.gasLimit).add(tx.value);
     }
     else {
-        return tx.gasPrice.add(tx.value);
+        return tx.gasPrice.mul(tx.gasLimit).add(tx.value);
     }
 }
 

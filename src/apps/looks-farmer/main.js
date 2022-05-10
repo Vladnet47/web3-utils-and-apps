@@ -10,17 +10,17 @@ const TOKEN_CONFIGS = [
     },
 ];
 
-process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
-process.env.DEBUG = 'true';
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 
 async function main() {
-    const { privateKeys } = await readConfigs();
-    const looksEnsurer = new LooksEnsurer(privateKeys, process.env.DEBUG !== 'false');
+    const { privateKeys, debug } = await readConfigs();
+    const looksEnsurer = new LooksEnsurer(privateKeys, debug);
     await looksEnsurer.load();
     for (const c of TOKEN_CONFIGS) {
-        await looksEnsurer.addToken(c.owner, c.tokenContract, c.tokenId, c.maxInsurance);
+        looksEnsurer.addPolicy(c.owner, c.tokenContract, c.tokenId, c.maxInsurance);
     }
+
+    console.log('Starting looks insurance in ' + (debug === false ? 'prod' : 'debug') + ' mode');
 
     await streamPendingTxs(LOOKS_ADDRESS, async tx => {
         try {

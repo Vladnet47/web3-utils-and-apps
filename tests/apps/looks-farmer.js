@@ -9,11 +9,13 @@ async function main() {
     const { privateKeys } = await readConfigs();
     const le = new LooksEnsurer(privateKeys, true);
     await le.load();
-    await le.addToken('vdog1', '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 81312, 0.1);
+    le.addPolicy('vdog1', '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 81312, 0.1);
 
     const prov = await getAlchemyHttpProv();
     const tx = await prov.getTransaction(TX_HASH);
     await le.handleTx(tx);
+
+    console.log(le.policies);
 }
 
 main().catch(console.log);

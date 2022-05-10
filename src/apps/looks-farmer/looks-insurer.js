@@ -17,10 +17,18 @@ class LooksEnsurer {
         }
 
         this._debug = debug !== false;
-        this._tokens = new Map();
+        this._policies = new Map();
         this._pks = pks;
         this._signers = new Map();
         this._req = new RequestModule(true);
+    }
+
+    get signers() {
+        return Array.from(this._signers.keys());
+    }
+
+    get policies() {
+        return Array.from(this._policies.values());
     }
 
     async load() {
@@ -38,7 +46,7 @@ class LooksEnsurer {
         await this._req.load();
     }
 
-    async addToken(owner, tokenContract, tokenId, maxInsurance) {
+    addPolicy(owner, tokenContract, tokenId, maxInsurance) {
         if (!owner) {
             throw new Error('Missing owner');
         }
@@ -58,15 +66,34 @@ class LooksEnsurer {
         const ownerAddress = this._signers.get(owner.toLowerCase()).signer.address;
 
         const id = this.toId(ownerAddress, tokenContract, tokenId);
-        this._tokens.set(id, {
+        this._policies.set(id, {
             owner: owner.toLowerCase(),
             ownerAddress: ownerAddress.toLowerCase(),
             tokenContract: tokenContract.toLowerCase(),
             tokenId,
             maxInsurance: ethers.utils.parseUnits(maxInsurance.toString()),
+            running: true,
         });
 
         console.log('Updated ' + id + ' with max insurance ' + maxInsurance);
+    }
+
+    removePolicy(owner, tokenContract, tokenId) {
+        if (!owner) {
+            throw new Error('Missing owner');
+        }
+        if (!tokenContract) {
+            throw new Error('Missing token contract');
+        }
+        if (tokenId == null || !isNumeric(tokenId)) {
+            throw new Error('Missing token id');
+        }
+        if (!this._signers.has(owner.toLowerCase())) {
+            throw new Error('Missing signer for ' + owner);
+        }
+        const ownerAddress = this._signers.get(owner.toLowerCase()).signer.address;
+        const id = this.toId(ownerAddress, tokenContract, tokenId);
+        this._policies.delete(id);
     }
 
     async handleTx(tx) {
@@ -86,12 +113,16 @@ class LooksEnsurer {
 
         // Check if token is ensured
         const id = this.toId(from, tokenContract, tokenId);
-        if (!this._tokens.has(id)) {
+        if (!this._policies.has(id)) {
             console.log('Tx ' + tx.hash + ' is not targeting any ensured tokens');
             return;
         }
 
-        const { maxInsurance, owner } = this._tokens.get(id);
+        const { maxInsurance, owner, running } = this._policies.get(id);
+        if (!running) {
+            console.log('Tx ' + tx.hash + ' policy is not running');
+        }
+
         const signer = this._signers.get(owner);
 
         // Get signer nonce
@@ -122,9 +153,10 @@ class LooksEnsurer {
             console.log('Transaction fee for cancellation is greater than insurance policy!');
             console.log(printTx(cancelTx));
             await notify(
-                from + ' failed to cuck sale of token ' + tokenId, 
+                owner + ' failed to cuck sale of token ' + tokenId, 
                 'https://etherscan.io/tx/' + tx.hash,
-                'Insurance policy was not set high enough for ' + ethers.utils.formatEther(txFee) + 'Ξ',
+                'Insurance policy was not set high enough for ' + ethers.utils.formatEther(txFee) + 'Ξ\n' +
+                '[Listing](https://looksrare.org/collections/' + tokenContract + '/' + tokenId + ')',
                 0xC70039
             );
             return;
@@ -143,30 +175,35 @@ class LooksEnsurer {
             success = await send(signer.signer, cancelTx);
         }
 
+        // Stop policy
+        this._policies.set(id, { ...this._policies.get(id), running: false });
+
         if (success) {
             await notify(
-                from + ' successfully cucked sale of token ' + tokenId, 
+                owner + ' successfully cucked sale of token ' + tokenId, 
                 'https://etherscan.io/tx/' + tx.hash,
-                'Used ' + ethers.utils.formatEther(txFee) + 'Ξ',
+                'Used max ' + ethers.utils.formatEther(txFee) + 'Ξ\n' +
+                '[Listing](https://looksrare.org/collections/' + tokenContract + '/' + tokenId + ')',
                 0x0BDA51
             );
         }
         else {
             await notify(
-                from + ' failed to cuck sale of token ' + tokenId, 
+                owner + ' failed to cuck sale of token ' + tokenId, 
                 'https://etherscan.io/tx/' + tx.hash,
-                'Used ' + ethers.utils.formatEther(txFee) + 'Ξ',
+                'Used max ' + ethers.utils.formatEther(txFee) + 'Ξ\n' +
+                '[Listing](https://looksrare.org/collections/' + tokenContract + '/' + tokenId + ')',
                 0xC70039
             );
         }
     }
 
     parseCalldata(calldata) {
-        return {
-            from: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d', 
-            tokenContract: '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 
-            tokenId: 81312
-        };
+        // return {
+        //     from: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d', 
+        //     tokenContract: '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 
+        //     tokenId: 81312
+        // };
         if (!calldata) {
             throw new Error('Missing calldata');
         }
