@@ -4,7 +4,8 @@
   "description": "Helpful scripts for blockchain interaction",
   "main": "src/index.js",
   "scripts": {
-    "looks-prod": "NODE_OPTIONS=--max-old-space-size=4096 PATH_TO_CONFIGS= node src/apps/looks-farmer/index.js"
+    "looks-prod": "NODE_OPTIONS=--max-old-space-size=4096 PATH_TO_CONFIGS=/home/kubeadmin/web3-utils/configs.json node src/apps/looks-farmer/index.js",
+    "looks-dev": "NODE_OPTIONS=--max-old-space-size=2048 PATH_TO_CONFIGS=/home/vdog/workspace/private/web3-utils/configs.json node src/apps/looks-farmer/index.js"
   },
   "repository": {
     "type": "git",
