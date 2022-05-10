@@ -1,5 +1,5 @@
 const { ethers } = require("ethers");
-const { getNftyHttpsProv, isNumeric, getTxCost, createTx, encodeTxData, printTx, send, simulate } = require("../../utils")
+const { getNftyHttpsProv, isNumeric, getTxCost, createTx, encodeTxData, printTx, send, simulate, notify } = require("../../utils")
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const CANCEL_FN = 'function cancelMultipleMakerOrders(uint256[] orderNonces) payable returns()';
@@ -86,30 +86,54 @@ class LooksEnsurer {
         const nonce = await signer.getTransactionCount();
 
         // Create cancel transaction to frontrun the purchase
+        const { maxInsurance, listingNonce } = this._tokens.get(id);
         const prioFee = tx.maxPriorityFeePerGas ? tx.maxPriorityFeePerGas.add(1) : tx.gasPrice.add(1);
         const tempMaxFee = tx.maxFeePerGas || tx.gasPrice;
         const maxFee = tempMaxFee.gte(prioFee) ? tempMaxFee : prioFee;
-        const cancelTx = createTx(LOOKS_ADDRESS, maxFee, prioFee, GAS_LIMIT, null, encodeTxData(CANCEL_FN, [tokenId]), nonce, tx.type);
+        const cancelTx = createTx(LOOKS_ADDRESS, maxFee, prioFee, GAS_LIMIT, null, encodeTxData(CANCEL_FN, [listingNonce]), nonce, tx.type);
 
         // Make sure insurance fee is acceptable
-        const { maxInsurance, listingNonce } = this._tokens.get(id);
         const txFee = await getTxCost(cancelTx);
         if (txFee.gt(maxInsurance)) {
             console.log('Transaction fee for cancellation is greater than insurance policy!');
             console.log(printTx(cancelTx));
-            return null;
+            await notify(
+                from + ' failed to cuck ' + to + ' for token ' + tokenId, 
+                'https://etherscan.io/tx/' + tx.hash,
+                'Insurance policy was not set high enough for ' + ethers.utils.formatEther(txFee) + 'Ξ',
+                0xC70039
+            );
+            return;
         }
 
         // Send cancellation tx
+        let success;
         if (this._debug) {
             console.log('Simulating cancel tx, frontrunning ' + tx.hash + '...');
             console.log(printTx(cancelTx));
-            await simulate(signer, tx);
+            success = await simulate(signer, tx);
         }
         else {
             console.log('Sending cancel tx, frontrunning ' + tx.hash + '...');
             console.log(printTx(cancelTx));
-            await send(signer, cancelTx);
+            success = await send(signer, cancelTx);
+        }
+
+        if (success) {
+            await notify(
+                from + ' successfully cucked ' + to + ' for token ' + tokenId, 
+                'https://etherscan.io/tx/' + tx.hash,
+                'Used ' + ethers.utils.formatEther(txFee) + 'Ξ',
+                0x0BDA51
+            );
+        }
+        else {
+            await notify(
+                from + ' failed to cuck ' + to + ' for token ' + tokenId, 
+                'https://etherscan.io/tx/' + tx.hash,
+                'Used ' + ethers.utils.formatEther(txFee) + 'Ξ',
+                0xC70039
+            );
         }
     }
 
