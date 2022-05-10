@@ -42,7 +42,7 @@ class DiscordController {
         this._client.login(this._token);
 
         this._client.on('messageCreate', async cursor => {
-            if (cursor.author.bot) {
+            if (cursor.author.bot || !cursor.channel.name.includes('looks')) {
                 return;
             }
 
@@ -160,7 +160,7 @@ class DiscordController {
         }
         if (policies.length > 0) {
             const formatPolicy = p => {
-                return p.owner + ' ' + p.tokenContract + ' ' + p.tokenId + ' ' + '[insured for ' + p.maxInsurance + '] [' + (p.running ? 'RUNNING' : 'STOPPED') + ']';
+                return p.owner + ' ' + p.tokenContract + ' ' + p.tokenId + ' ' + '[insured for ' + ethers.utils.formatEther(p.maxInsurance) + 'Ξ] [' + (p.running ? 'RUNNING' : 'STOPPED') + ']';
             }
             let str = formatPolicy(policies[0]);
             for (let i = 1; i < policies.length; ++i) {
