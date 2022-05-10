@@ -11,6 +11,7 @@ const TOKEN_CONFIGS = [
 ];
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
+const WS_RESTART_DELAY = 3600000; // Once an hour
 
 async function main() {
     const { privateKeys, debug } = await readConfigs();
@@ -21,8 +22,12 @@ async function main() {
     }
 
     console.log('Starting looks insurance in ' + (debug === false ? 'prod' : 'debug') + ' mode');
+    await start(looksEnsurer);
+}
 
-    await streamPendingTxs(LOOKS_ADDRESS, async tx => {
+async function start(looksEnsurer) {
+    console.log('(re)starting websocket connection!');
+    const close = await streamPendingTxs(LOOKS_ADDRESS, async tx => {
         try {
             await looksEnsurer.handleTx(tx);
         }
@@ -32,6 +37,12 @@ async function main() {
             console.log(printTx(tx));
         }
     });
+
+    // Restart after an hour to prevent socket from timing out
+    setTimeout(async () => {
+        await close();
+        await start(looksEnsurer);
+    }, WS_RESTART_DELAY);
 }
 
 module.exports = main;
