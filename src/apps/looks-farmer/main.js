@@ -6,16 +6,9 @@ const TOKEN_CONFIGS = [
         owner: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d',
         tokenContract: '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258',
         tokenId: 81312,
-        listingNonce: 12,
+        listingNonce: 13,
         maxInsurance: 0.1,
-    },
-    {
-        owner: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d',
-        tokenContract: '0xfb7d186e24e128be1f1339fb9c2ba6fdbd87c6f9',
-        tokenId: 14583,
-        listingNonce: 17,
-        maxInsurance: 0.1,
-    },
+    }
 ];
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
