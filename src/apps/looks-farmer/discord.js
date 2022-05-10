@@ -1,3 +1,4 @@
+const ethers = require('ethers');
 const { Client, Intents } = require('discord.js');
 const { notify } = require('../../utils');
 
