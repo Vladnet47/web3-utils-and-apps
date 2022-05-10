@@ -41,7 +41,7 @@ async function writeCsv(path, f) {
     if (!f) {
         throw new Error('Missing csv data to write');
     }
-    await fs.writeFile(f.toString());
+    await fs.writeFile(path, f.toString());
 }
 
 async function existsFile(path) {

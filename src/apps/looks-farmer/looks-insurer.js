@@ -1,5 +1,5 @@
 const { ethers } = require("ethers");
-const { getNftyHttpsProv, isNumeric, getTxCost, createTx, encodeTxData, printTx, send, simulate, notify, RequestModule } = require("../../utils")
+const { getNftyHttpsProv, isNumeric, getTxCost, createTx, encodeTxData, printTx, send, simulate, notify, RequestModule, readCsv, writeCsv, existsFile } = require("../../utils")
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const CANCEL_FN = 'function cancelMultipleMakerOrders(uint256[] orderNonces) payable returns()';
@@ -11,11 +11,15 @@ const LOOKS_IFACE = new ethers.utils.Interface([
 const GAS_LIMIT = 70000;
 
 class LooksEnsurer {
-    constructor(pks, debug) {
+    constructor(pks, savePath, debug) {
         if (!pks) {
             throw new Error('Missing private keys');
         }
+        if (!savePath) {
+            throw new Error('Missing save path');
+        }
 
+        this._savePath = savePath;
         this._debug = debug !== false;
         this._policies = new Map();
         this._pks = pks;
@@ -32,6 +36,7 @@ class LooksEnsurer {
     }
 
     async load() {
+        // Load signer private keys from configs
         const prov = await getNftyHttpsProv();
         const cont = new ethers.Contract(LOOKS_ADDRESS, LOOKS_IFACE, prov);
         for (const [name, pk] of Object.entries(this._pks)) {
@@ -42,11 +47,35 @@ class LooksEnsurer {
             const contractSigner = cont.connect(signer);
             this._signers.set(name.toLowerCase(), contractSigner);
         }
-        console.log('Created ' + this._signers.size + ' signers from configs');
+        console.log('Loaded ' + this._signers.size + ' signers from configs');
+
+        // Load proxies from external database
         await this._req.load();
+
+        // Load policies from storage
+        if (await existsFile(this._savePath)) {
+            const policies = await readCsv(this._savePath);
+            for (const policy of policies) {
+                try {
+                    await this.addPolicy(policy.owner, policy.tokenContract, policy.tokenId, policy.maxInsurance);
+                }
+                catch (err) {
+                    console.log('Failed to load policy: ' + err.message);
+                }
+            }
+        }
     }
 
-    addPolicy(owner, tokenContract, tokenId, maxInsurance) {
+    async save() {
+        let csv = 'owner,tokenContract,tokenId,maxInsurance';
+        for (const policy of this._policies.values()) {
+            csv += '\n' + policy.owner + ',' + policy.tokenContract + ',' + policy.tokenId + ',' + ethers.utils.formatEther(policy.maxInsurance);
+        }
+        await writeCsv(this._savePath, csv);
+        console.log('Saved ' + this._policies.size + ' policies');
+    }
+
+    async addPolicy(owner, tokenContract, tokenId, maxInsurance) {
         if (!owner) {
             throw new Error('Missing owner');
         }
@@ -71,14 +100,15 @@ class LooksEnsurer {
             ownerAddress: ownerAddress.toLowerCase(),
             tokenContract: tokenContract.toLowerCase(),
             tokenId,
-            maxInsurance: ethers.utils.parseUnits(maxInsurance.toString()),
+            maxInsurance: ethers.utils.parseEther(maxInsurance.toString()),
             running: true,
         });
 
         console.log('Updated ' + id + ' with max insurance ' + maxInsurance);
+        await this.save();
     }
 
-    removePolicy(owner, tokenContract, tokenId) {
+    async removePolicy(owner, tokenContract, tokenId) {
         if (!owner) {
             throw new Error('Missing owner');
         }
@@ -94,6 +124,7 @@ class LooksEnsurer {
         const ownerAddress = this._signers.get(owner.toLowerCase()).signer.address;
         const id = this.toId(ownerAddress, tokenContract, tokenId);
         this._policies.delete(id);
+        await this.save();
     }
 
     async handleTx(tx) {
@@ -111,16 +142,16 @@ class LooksEnsurer {
             return;
         }
 
-        // Check if token is ensured
+        // Check if token is insured
         const id = this.toId(from, tokenContract, tokenId);
         if (!this._policies.has(id)) {
-            console.log('Tx ' + tx.hash + ' is not targeting any ensured tokens');
+            console.log('Tx ' + tx.hash + ' is not targeting any insured tokens');
             return;
         }
 
         const { maxInsurance, owner, running } = this._policies.get(id);
         if (!running) {
-            console.log('Tx ' + tx.hash + ' policy is not running');
+            console.log('Tx ' + tx.hash + ' matching policy for ' + owner + ' is not running');
         }
 
         const signer = this._signers.get(owner);

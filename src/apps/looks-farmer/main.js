@@ -2,21 +2,13 @@ const { readConfigs, streamPendingTxs, printTx } = require('../../utils');
 const LooksEnsurer = require('./looks-insurer');
 const DiscordController = require('./discord');
 
-const TOKEN_CONFIGS = [
-    {
-        owner: 'vdog1',
-        tokenContract: '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258',
-        tokenId: 81312,
-        maxInsurance: 0.1,
-    },
-];
-
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const WS_RESTART_DELAY = 3600000; // Once an hour
+const SAVE_PATH = process.cwd() + '/src/apps/looks-farmer/policies.csv';
 
 async function main() {
     const { privateKeys, debug, discordKey, auth } = await readConfigs();
-    const looksEnsurer = new LooksEnsurer(privateKeys, debug);
+    const looksEnsurer = new LooksEnsurer(privateKeys, SAVE_PATH, debug);
     await looksEnsurer.load();
     
     const discordCont = new DiscordController(discordKey, auth, looksEnsurer);
