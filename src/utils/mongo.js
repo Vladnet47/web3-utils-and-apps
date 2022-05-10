@@ -5,7 +5,7 @@ const common = require('./common');
 async function readProxies() {
     const { database } = await file.readConfigs();
     await open(database.host, database.port, database.database, database.username, database.password);
-    const proxies = await mongoose.model('proxy').find({}).select('-_id host port username password').lean().exec();
+    const proxies = await mongoose.model('proxy').find({ suspended: false }).select('-_id host port username password').lean().exec();
     await close();
     return proxies;
 }
