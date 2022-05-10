@@ -141,12 +141,11 @@ async function scanFns(address, chainId) {
         throw new Error('Missing address');
     }
 
-    const { etherscan } = await readConfigs();
     const prov = await getAlchemyHttpProv(chainId);
 
     let abi;
     try {
-        abi = await getContractAbi(etherscan, address);
+        abi = await getContractAbi(address);
     }
     catch (err) {
         console.log('Failed to retrieve contract abi for ' + address + ': ' + err.message);

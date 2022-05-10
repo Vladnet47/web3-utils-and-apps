@@ -42,7 +42,7 @@ class RequestModule {
             retry: 0
         };
         
-        const proxy = await this._getNextProxy();
+        const proxy = await this._nextProxy();
         if (proxy) {
             req.agent = { https: tunnel.httpsOverHttp({ proxy }) };
         }

@@ -231,14 +231,15 @@ async function getAddressDetails(provider, address) {
     };
 }
 
-async function getContractAbi(etherscanKey, address) {
-    if (!etherscanKey) {
+async function getContractAbi(address) {
+    const { etherscan } = await file.readConfigs();
+    if (!etherscan) {
         throw new Error('Missing etherscan key');
     }
     if (!ethers.utils.isAddress(address)) {
         throw new Error('Missing address');
     }
-    const response = await got.get('https://api.etherscan.io/api?module=contract&action=getabi&address=' + address + '&apikey=' + etherscanKey, { 
+    const response = await got.get('https://api.etherscan.io/api?module=contract&action=getabi&address=' + address + '&apikey=' + etherscan, { 
         responseType: 'json', 
         timeout: 6000, 
         retry: 0 
