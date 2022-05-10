@@ -57,14 +57,21 @@ async function sendOnLive(signer, tx) {
 
 // Sends provided tx
 async function send(signer, tx) {
-    if (!signer || !signer.isSigner) {
-        throw new Error('Missing or invalid signer');
+    if (!signer) {
+        throw new Error('Missing signer');
     }
     if (!tx) {
         throw new Error('Missing tx');
     }
-    const res = await signer.sendTransaction(tx);
-    return await res.wait();
+    try {
+        const res = await signer.sendTransaction(tx);
+        await res.wait();
+        return true;
+    }
+    catch (err) {
+        console.log(err.message);
+        return false;
+    }
 }
 
 // Simulates provided tx against latest block
@@ -75,7 +82,14 @@ async function simulate(provider, tx) {
     if (!tx) {
         throw new Error('Missing tx');
     }
-    await provider.call(tx, 'latest');
+    try {
+        await provider.call(tx, 'latest');
+        return true;
+    }
+    catch (err) {
+        console.log(err.message);
+        return false;
+    }
 }
 
 module.exports = {

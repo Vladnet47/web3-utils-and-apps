@@ -18,11 +18,14 @@ class LooksEnsurer {
 
         this._debug = debug !== false;
         this._tokens = new Map();
+        this._pks = pks;
         this._signers = new Map();
+    }
 
+    async load() {
         const prov = await getNftyHttpsProv();
         const cont = new ethers.Contract(LOOKS_ADDRESS, LOOKS_IFACE, prov);
-        for (const [name, pk] of Object.entries(pks)) {
+        for (const [name, pk] of Object.entries(this._pks)) {
             if (!name || !pk) {
                 throw new Error('Missing private key name or pk');
             }
@@ -56,12 +59,12 @@ class LooksEnsurer {
         const id = this.toId(owner, tokenContract, tokenId);
         this._tokens.set(id, { 
             listingNonce: parseInt(listingNonce),
-            maxInsurance: ethers.utils.parseUnits(maxInsurance),
+            maxInsurance: ethers.utils.parseUnits(maxInsurance.toString()),
         });
         console.log('Updated ' + id + ' for nonce ' + listingNonce + ' and max insurance ' + maxInsurance);
     }
 
-    handleTx(tx) {
+    async handleTx(tx) {
         if (!tx || !tx.data) {
             throw new Error('Missing tx or tx data');
         }
@@ -72,25 +75,37 @@ class LooksEnsurer {
         // Get token information
         const { to, from, tokenId, tokenContract } = this.parseCalldata(tx.data);
         if (!from || !tokenContract || !tokenId) {
-            return null;
+            console.log('Tx ' + tx.hash + ' is not a sale');
+            return;
         }
 
         // Check if token is ensured
         const id = this.toId(from, tokenContract, tokenId);
         if (!this._tokens.has(id)) {
-            return null;
+            console.log('Tx ' + tx.hash + ' is not targeting any ensured tokens');
+            return;
         }
 
         // Get signer nonce
         const signer = this._signers.get(from.toLowerCase());
-        const nonce = await signer.getTransactionCount();
+        const nonce = await signer.signer.getTransactionCount();
 
         // Create cancel transaction to frontrun the purchase
         const { maxInsurance, listingNonce } = this._tokens.get(id);
-        const prioFee = tx.maxPriorityFeePerGas ? tx.maxPriorityFeePerGas.add(1) : tx.gasPrice.add(1);
+        const frontrunFee = ethers.utils.parseUnits('1', 'gwei');
+        const prioFee = tx.maxPriorityFeePerGas ? tx.maxPriorityFeePerGas.add(frontrunFee) : tx.gasPrice.add(frontrunFee);
         const tempMaxFee = tx.maxFeePerGas || tx.gasPrice;
         const maxFee = tempMaxFee.gte(prioFee) ? tempMaxFee : prioFee;
-        const cancelTx = createTx(LOOKS_ADDRESS, maxFee, prioFee, GAS_LIMIT, null, encodeTxData(CANCEL_FN, [listingNonce]), nonce, tx.type);
+        const cancelTx = createTx(
+            LOOKS_ADDRESS, 
+            ethers.utils.formatUnits(maxFee, 'gwei'), 
+            ethers.utils.formatUnits(prioFee, 'gwei'), 
+            GAS_LIMIT, 
+            null, 
+            encodeTxData(CANCEL_FN, [[listingNonce]]), 
+            nonce, 
+            tx.type
+        );
 
         // Make sure insurance fee is acceptable
         const txFee = await getTxCost(cancelTx);
@@ -98,7 +113,7 @@ class LooksEnsurer {
             console.log('Transaction fee for cancellation is greater than insurance policy!');
             console.log(printTx(cancelTx));
             await notify(
-                from + ' failed to cuck ' + to + ' for token ' + tokenId, 
+                from + ' failed to cuck sale of token ' + tokenId, 
                 'https://etherscan.io/tx/' + tx.hash,
                 'Insurance policy was not set high enough for ' + ethers.utils.formatEther(txFee) + 'Ξ',
                 0xC70039
@@ -111,17 +126,17 @@ class LooksEnsurer {
         if (this._debug) {
             console.log('Simulating cancel tx, frontrunning ' + tx.hash + '...');
             console.log(printTx(cancelTx));
-            success = await simulate(signer, tx);
+            success = await simulate(signer.provider, cancelTx);
         }
         else {
             console.log('Sending cancel tx, frontrunning ' + tx.hash + '...');
             console.log(printTx(cancelTx));
-            success = await send(signer, cancelTx);
+            success = await send(signer.signer, cancelTx);
         }
 
         if (success) {
             await notify(
-                from + ' successfully cucked ' + to + ' for token ' + tokenId, 
+                from + ' successfully cucked sale of token ' + tokenId, 
                 'https://etherscan.io/tx/' + tx.hash,
                 'Used ' + ethers.utils.formatEther(txFee) + 'Ξ',
                 0x0BDA51
@@ -129,7 +144,7 @@ class LooksEnsurer {
         }
         else {
             await notify(
-                from + ' failed to cuck ' + to + ' for token ' + tokenId, 
+                from + ' failed to cuck sale of token ' + tokenId, 
                 'https://etherscan.io/tx/' + tx.hash,
                 'Used ' + ethers.utils.formatEther(txFee) + 'Ξ',
                 0xC70039
@@ -154,13 +169,25 @@ class LooksEnsurer {
         }
         else if (calldata.startsWith('0x38e29209')) {
             const decoded = LOOKS_IFACE.decodeFunctionData('matchAskWithTakerBid', calldata);
-            console.log('matchAskWithTakerBid');
-            console.log(JSON.stringify(decoded, null, 2));
+            const takerBid = decoded[0];
+            const makerAsk = decoded[1];
+            return {
+                to: takerBid[1],
+                from: makerAsk[1],
+                tokenContract: makerAsk[2],
+                tokenId: takerBid[3],
+            };
         }
         else if (calldata.startsWith('0x3b6d032e')) {
             const decoded = LOOKS_IFACE.decodeFunctionData('matchBidWithTakerAsk', calldata);
-            console.log('matchBidWithTakerAsk');
-            console.log(JSON.stringify(decoded, null, 2));
+            const takerBid = decoded[0];
+            const makerAsk = decoded[1];
+            return {
+                to: makerAsk[1],
+                from: takerBid[1],
+                tokenContract: makerAsk[2],
+                tokenId: takerBid[3],
+            };
         }
         else {
             return {};

@@ -11,7 +11,7 @@ function sleep(ms) {
 
 // Returns true if value is numeric
 function isNumeric(value) {
-    return value != null && !value.startsWith('0x') && !isNaN(parseFloat(value)) && isFinite(value);
+    return value != null && !value.toString().startsWith('0x') && !isNaN(parseFloat(value)) && isFinite(value);
 }
 
 async function runInBatches(tasks, maxConcurrent) {

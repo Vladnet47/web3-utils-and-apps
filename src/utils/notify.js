@@ -15,7 +15,7 @@ async function notify(title, url, description, color) {
             footer: {
                 text: ts()
             },
-            color: 0x008BDB
+            color: color || 0x008BDB
         }]
     };
 

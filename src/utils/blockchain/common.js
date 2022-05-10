@@ -103,18 +103,32 @@ function createTx(to, max, prio, limit, value, data, nonce, type) {
     }
     max = ethers.utils.parseUnits(max.toString(), 'gwei');
     value = value ? ethers.utils.parseEther(value.toString()) : ethers.BigNumber.from(0);
-    return {
-        to,
-        gasPrice: max,
-        maxFeePerGas: max,
-        maxPriorityFeePerGas: prio ? ethers.utils.parseUnits(prio.toString(), 'gwei') : max,
-        gasLimit: limit,
-        value,
-        type: type == null ? 2 : type,
-        data: data || '0x',
-        chainId: 1,
-        nonce,
-    };
+
+    if (type === 2) {
+        return {
+            to,
+            maxFeePerGas: max,
+            maxPriorityFeePerGas: prio ? ethers.utils.parseUnits(prio.toString(), 'gwei') : max,
+            gasLimit: limit,
+            value,
+            type: type == null ? 2 : type,
+            data: data || '0x',
+            chainId: 1,
+            nonce,
+        };
+    }
+    else {
+        return {
+            to,
+            gasPrice: max,
+            gasLimit: limit,
+            value,
+            type: type == null ? 2 : type,
+            data: data || '0x',
+            chainId: 1,
+            nonce,
+        };
+    }
 }
 
 // Formats and prints transaction
@@ -190,8 +204,9 @@ function encodeTxData(fnSig, params) {
     }
     const abi = [(fnSig.startsWith('function') ? '' : 'function ') + fnSig];
     const iface = new ethers.utils.Interface(abi);
+    const sig = iface.fragments[0].format();
     try {
-        return iface.encodeFunctionData(fnSig, params);
+        return iface.encodeFunctionData(sig, params);
     }
     catch (err) {
         throw new Error('Invalid parameters for function signature: ' + err.message);
