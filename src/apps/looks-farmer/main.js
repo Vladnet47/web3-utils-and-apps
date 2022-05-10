@@ -1,5 +1,6 @@
 const { readConfigs, streamPendingTxs, printTx } = require('../../utils');
 const LooksEnsurer = require('./looks-insurer');
+const DiscordController = require('./discord');
 
 const TOKEN_CONFIGS = [
     {
@@ -14,12 +15,12 @@ const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const WS_RESTART_DELAY = 3600000; // Once an hour
 
 async function main() {
-    const { privateKeys, debug } = await readConfigs();
+    const { privateKeys, debug, discordKey, auth } = await readConfigs();
     const looksEnsurer = new LooksEnsurer(privateKeys, debug);
     await looksEnsurer.load();
-    for (const c of TOKEN_CONFIGS) {
-        looksEnsurer.addPolicy(c.owner, c.tokenContract, c.tokenId, c.maxInsurance);
-    }
+    
+    const discordCont = new DiscordController(discordKey, auth, looksEnsurer);
+    await discordCont.start();
 
     console.log('Starting looks insurance in ' + (debug === false ? 'prod' : 'debug') + ' mode');
     await start(looksEnsurer);

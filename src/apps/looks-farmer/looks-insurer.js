@@ -50,8 +50,8 @@ class LooksEnsurer {
         if (!owner) {
             throw new Error('Missing owner');
         }
-        if (!tokenContract) {
-            throw new Error('Missing token contract');
+        if (!tokenContract || !ethers.utils.isAddress(tokenContract)) {
+            throw new Error('Missing or invalid token contract');
         }
         if (tokenId == null || !isNumeric(tokenId)) {
             throw new Error('Missing token id');

@@ -21,6 +21,7 @@
     "@flashbots/ethers-provider-bundle": "^0.4.3",
     "async-mutex": "^0.3.2",
     "csvtojson": "^2.0.10",
+    "discord.js": "^13.6.0",
     "ethers": "^5.6.1",
     "got": "^11.8.3",
     "mongoose": "^6.3.1",
