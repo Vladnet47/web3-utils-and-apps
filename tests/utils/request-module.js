@@ -1,9 +1,9 @@
-const { RequestModule } = require('../../src/utils');
+const { HttpRequests } = require('../../src/utils');
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
 
 async function main() {
-    const req = new RequestModule(true);
+    const req = new HttpRequests(true);
     console.log(await req.get('https://www.google.com', null, 'text'));
 }
 

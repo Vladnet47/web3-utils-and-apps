@@ -1,4 +1,4 @@
-const { readConfigs, streamPendingTxs, printTx } = require('../../utils');
+const { readConfigs, streamPendingTxs, printTx, LooksrareRequests } = require('../../utils');
 const LooksEnsurer = require('./looks-insurer');
 const DiscordController = require('./discord');
 
@@ -8,7 +8,8 @@ const SAVE_PATH = process.cwd() + '/src/apps/looks-farmer/policies.csv';
 
 async function main() {
     const { privateKeys, debug, discordKey, auth } = await readConfigs();
-    const looksEnsurer = new LooksEnsurer(privateKeys, SAVE_PATH, debug);
+    const looksRequests = new LooksrareRequests(true);
+    const looksEnsurer = new LooksEnsurer(looksRequests, privateKeys, SAVE_PATH, debug);
     await looksEnsurer.load();
     
     const discordCont = new DiscordController(discordKey, auth, looksEnsurer);

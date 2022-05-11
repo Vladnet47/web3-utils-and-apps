@@ -1,5 +1,5 @@
 const { ethers } = require("ethers");
-const { getNftyHttpsProv, isNumeric, getTxCost, createTx, encodeTxData, printTx, send, simulate, notify, RequestModule, readCsv, writeCsv, existsFile } = require("../../utils")
+const { getNftyHttpsProv, isNumeric, getTxCost, createTx, encodeTxData, printTx, send, simulate, notify, readCsv, writeCsv, existsFile } = require("../../utils")
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const CANCEL_FN = 'function cancelMultipleMakerOrders(uint256[] orderNonces) payable returns()';
@@ -11,7 +11,10 @@ const LOOKS_IFACE = new ethers.utils.Interface([
 const GAS_LIMIT = 70000;
 
 class LooksEnsurer {
-    constructor(pks, savePath, debug) {
+    constructor(requests, pks, savePath, debug) {
+        if (!requests) {
+            throw new Error('Missing looksrare requests module');
+        }
         if (!pks) {
             throw new Error('Missing private keys');
         }
@@ -21,10 +24,10 @@ class LooksEnsurer {
 
         this._savePath = savePath;
         this._debug = debug !== false;
-        this._policies = new Map();
         this._pks = pks;
+        this._policies = new Map();
         this._signers = new Map();
-        this._req = new RequestModule(true);
+        this._req = requests;
     }
 
     get signers() {
@@ -57,7 +60,7 @@ class LooksEnsurer {
             const policies = await readCsv(this._savePath);
             for (const policy of policies) {
                 try {
-                    await this.addPolicy(policy.owner, policy.tokenContract, policy.tokenId, policy.maxInsurance);
+                    await this.addPolicy(policy.owner, policy.tokenContract, policy.tokenId, policy.maxInsurance, false);
                 }
                 catch (err) {
                     console.log('Failed to load policy: ' + err.message);
@@ -75,7 +78,7 @@ class LooksEnsurer {
         console.log('Saved ' + this._policies.size + ' policies');
     }
 
-    async addPolicy(owner, tokenContract, tokenId, maxInsurance) {
+    async addPolicy(owner, tokenContract, tokenId, maxInsurance, save = true) {
         if (!owner) {
             throw new Error('Missing owner');
         }
@@ -105,7 +108,9 @@ class LooksEnsurer {
         });
 
         console.log('Updated ' + id + ' with max insurance ' + maxInsurance);
-        await this.save();
+        if (save !== false) {
+            await this.save();
+        }
     }
 
     async removePolicy(owner, tokenContract, tokenId) {
@@ -152,6 +157,7 @@ class LooksEnsurer {
         const { maxInsurance, owner, running } = this._policies.get(id);
         if (!running) {
             console.log('Tx ' + tx.hash + ' matching policy for ' + owner + ' is not running');
+            return;
         }
 
         const signer = this._signers.get(owner);
@@ -159,8 +165,12 @@ class LooksEnsurer {
         // Get signer nonce
         const [nonce, { listingNonce }] = await Promise.all([
             signer.signer.getTransactionCount(),
-            this.getListingDetails(tokenContract, tokenId)
+            this._req.getListing(tokenContract, tokenId)
         ]);
+        if (!listingNonce) {
+            console.log('Tx ' + tx.hash + ' failed to retrieve listing nonce');
+            return;
+        }
 
         // Create cancel transaction to frontrun the purchase
         const frontrunFee = ethers.utils.parseUnits('1', 'gwei');
@@ -230,11 +240,11 @@ class LooksEnsurer {
     }
 
     parseCalldata(calldata) {
-        // return {
-        //     from: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d', 
-        //     tokenContract: '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 
-        //     tokenId: 81312
-        // };
+        return {
+            from: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d', 
+            tokenContract: '0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 
+            tokenId: 81312
+        };
         if (!calldata) {
             throw new Error('Missing calldata');
         }
@@ -272,61 +282,6 @@ class LooksEnsurer {
             };
         }
         else {
-            return {};
-        }
-    }
-
-    async getListingDetails(tokenContract, tokenId) {
-        if (!tokenContract || tokenId == null) {
-            throw new Error('Missing token contract or id');
-        }
-
-        const url = 'https://api.looksrare.org/graphql';
-
-        const headers = {
-            'authority': 'api.looksrare.org',
-            'method': 'POST',
-            'path': '/graphql',
-            'scheme': 'https',
-            'accept': '*/*',
-            'accept-encoding': 'gzip, deflate, br',
-            'accept-language': 'en-US,en;q=0.9',
-            'content-type': 'application/json',
-            'dnt': '1',
-            'origin': 'https://looksrare.org',
-            'referer': 'https://looksrare.org/',
-            'sec-ch-ua': '"Not A;Brand";v="99", "Chromium";v="101", "Google Chrome";v="101"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36'
-        };
-
-        const body = {
-            query: "\n    query GetToken($collection: Address!, $tokenId: String!) {\n      token(collection: $collection, tokenId: $tokenId) {\n        id\n        tokenId\n        image {\n          src\n          contentType\n        }\n        name\n        countOwners\n        description\n        animation {\n          src\n          contentType\n          original\n        }\n        lastOrder {\n          price\n          currency\n        }\n        collection {\n          name\n          address\n          type\n          isVerified\n          points\n          totalSupply\n          description\n          owner {\n            ...CollectionOwnerFragment\n          }\n          floorOrder {\n            price\n          }\n          floor {\n            floorPriceOS\n            floorPrice\n            floorChange24h\n            floorChange7d\n            floorChange30d\n          }\n        }\n        ask {\n          ...OrderFragment\n        }\n        attributes {\n          ...AttributeFragment\n        }\n      }\n    }\n    \n  fragment AttributeFragment on Attribute {\n    traitType\n    value\n    displayType\n    count\n    floorOrder {\n      price\n    }\n  }\n\n    \n  fragment OrderFragment on Order {\n    isOrderAsk\n    signer\n    collection {\n      address\n    }\n    price\n    amount\n    strategy\n    currency\n    nonce\n    startTime\n    endTime\n    minPercentageToAsk\n    params\n    signature\n    token {\n      tokenId\n    }\n    hash\n  }\n\n    \n  fragment CollectionOwnerFragment on User {\n    address\n    name\n    isVerified\n    avatar {\n      id\n      tokenId\n      image {\n        src\n        contentType\n      }\n    }\n  }\n\n  ",
-            variables: {
-                collection: tokenContract.toString(),
-                tokenId: tokenId.toString()
-            }
-        };
-        
-        try {
-            const res = await this._req.post(url, body, headers, 'json');
-            if (res && res.data && res.data.token) {
-                return {
-                    floorPrice: ethers.utils.parseEther(res.data.token.collection.floorOrder.price),
-                    floorPriceOS: ethers.utils.parseEther(res.data.token.collection.floor.floorPriceOS),
-                    price: ethers.utils.parseEther(res.data.token.ask.price),
-                    listingNonce: res.data.token.ask.nonce,
-                };
-            }
-
-            return {};
-        }
-        catch (err) {
-            console.log('Failed to retrieve listing details from looksrare: ' + err.message);
             return {};
         }
     }

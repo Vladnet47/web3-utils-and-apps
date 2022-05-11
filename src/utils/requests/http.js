@@ -1,9 +1,9 @@
 const { Mutex } = require('async-mutex');
 const got = require('got');
 const tunnel = require('tunnel');
-const mongo = require('./mongo');
+const mongo = require('../mongo');
 
-class RequestModule {
+class HttpRequests {
     constructor(useProxy) {
         this._useProxy = useProxy === true;
         this._proxies = [];
@@ -13,7 +13,7 @@ class RequestModule {
     }
 
     async load() {
-        if (this._useProxy) {
+        if (this._useProxy && !this._loaded) {
             this._proxies = await mongo.readProxies();
             this._loaded = true;
             console.log('Loaded ' + this._proxies.length + ' proxies');
@@ -104,7 +104,7 @@ class RequestModule {
     async _nextProxy() {
         const release = await this._proxyMutex.acquire();
         try {
-            await this._ensureProxy();
+            await this.load();
             if (!this._useProxy || this._proxies.length === 0) {
                 return null;
             }
@@ -114,13 +114,6 @@ class RequestModule {
         }
         finally {
             release();
-        }
-    }
-
-    async _ensureProxy() {
-        if (this._useProxy && !this._loaded) {
-            await this.load();
-            this._loaded = true;
         }
     }
     
@@ -134,4 +127,4 @@ class RequestModule {
     }
 }
 
-module.exports = RequestModule;
+module.exports = HttpRequests;

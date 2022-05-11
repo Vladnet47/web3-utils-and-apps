@@ -270,6 +270,31 @@ async function getContractAbi(address) {
     return JSON.parse(abi);
 }
 
+async function getContractSourceCode(address) {
+    const { etherscan } = await file.readConfigs();
+    if (!etherscan) {
+        throw new Error('Missing etherscan key');
+    }
+    if (!ethers.utils.isAddress(address)) {
+        throw new Error('Missing address');
+    }
+
+    const response = await got.get('https://api.etherscan.io/api?module=contract&action=getsourcecode&address=' + address + '&apikey=' + etherscan, { 
+        responseType: 'json', 
+        timeout: 6000, 
+        retry: 0 
+    });
+    const body = response.body;
+    if (body.status !== '1') {
+        throw new Error('Failed to retrieve contract abi: ' + body.message);
+    }
+    const sourcecode = body.result;
+    if (!Array.isArray(sourcecode) || sourcecode.length === 0) {
+        throw new Error('Contract is not verified');
+    }
+    const code = JSON.parse(sourcecode[0].SourceCode.substring(1, sourcecode[0].SourceCode.toString().length - 1));
+    return code;
+}
 
 module.exports = {
     getAlchemyWsProv,
@@ -292,4 +317,5 @@ module.exports = {
     encodeTxData,
     getAddressDetails,
     getContractAbi,
+    getContractSourceCode
 };
