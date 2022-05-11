@@ -2,7 +2,7 @@ const { getContractSourceCode } = require('../../../src/utils');
 const fs = require('fs').promises;
 
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
-const SOURCE_DIR = process.cwd() + '/tests/sourceCode/';
+const SOURCE_DIR = process.cwd() + '/hardhat/contracts/temp/';
 
 async function main() {
     const address = '0x59728544B08AB483533076417FbBB2fD0B17CE3a';
