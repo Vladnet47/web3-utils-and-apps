@@ -286,14 +286,23 @@ async function getContractSourceCode(address) {
     });
     const body = response.body;
     if (body.status !== '1') {
-        throw new Error('Failed to retrieve contract abi: ' + body.message);
+        throw new Error('Failed to retrieve contract source code: ' + body.message);
     }
-    const sourcecode = body.result;
-    if (!Array.isArray(sourcecode) || sourcecode.length === 0) {
+    const details = body.result;
+    if (!Array.isArray(details) || details.length === 0) {
         throw new Error('Contract is not verified');
     }
-    const code = JSON.parse(sourcecode[0].SourceCode.substring(1, sourcecode[0].SourceCode.toString().length - 1));
-    return code;
+    const first = details[0].SourceCode;
+    const code = JSON.parse(first.substring(1, first.length - 1));
+    if (!code) {
+        throw new Error('Missing source code');
+    }
+    const contracts = [];
+    for (const [name, value] of Object.entries(code.sources)) {
+        const split = name.split('/');
+        contracts.push({ name: split[split.length - 1], code: value.content });
+    }
+    return contracts;
 }
 
 module.exports = {
