@@ -2,6 +2,15 @@
 out/*
 .vscode
 
+.env
+coverage
+coverage.json
+typechain
+
+#Hardhat files
+cache
+artifacts
+
 # Logs
 logs
 *.log
