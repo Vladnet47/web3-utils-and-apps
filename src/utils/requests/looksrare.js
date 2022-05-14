@@ -1,7 +1,7 @@
 const ethers = require('ethers');
 const HttpRequests = require('./http');
 
-class LooksrareRequests extends HttpRequests {
+class LooksRequests extends HttpRequests {
     async getListing(tokenContract, tokenId) {
         if (!tokenContract) {
             throw new Error('Missing token contract');
@@ -46,8 +46,8 @@ class LooksrareRequests extends HttpRequests {
                 return {
                     floorPrice: ethers.utils.parseEther(res.data.token.collection.floorOrder.price),
                     floorPriceOS: ethers.utils.parseEther(res.data.token.collection.floor.floorPriceOS),
-                    price: ethers.utils.parseEther(res.data.token.ask.price),
-                    listingNonce: res.data.token.ask.nonce,
+                    price: res.data.token.ask ? ethers.utils.parseEther(res.data.token.ask.price) : null,
+                    listingNonce: res.data.token.ask ? res.data.token.ask.nonce : null,
                 };
             }
             else {
@@ -61,4 +61,4 @@ class LooksrareRequests extends HttpRequests {
     }
 }
 
-module.exports = LooksrareRequests;
+module.exports = LooksRequests;

@@ -1,4 +1,4 @@
 module.exports = {
     HttpRequests: require('./http'),
-    LooksrareRequests: require('./looksrare'),
+    LooksRequests: require('./looksrare'),
 };

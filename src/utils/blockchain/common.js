@@ -1,5 +1,4 @@
 const ethers = require('ethers');
-const got = require('got');
 const file = require('../file');
 
 async function getAlchemyWsProv(chainId) {
@@ -78,155 +77,7 @@ async function getHttpsProv(endpoint, chainId) {
     return provider;
 }
 
-// Creates new eip1559 transaction
-// All values are in pre-processed state (fees in gwei, )
-function createTx(to, max, prio, limit, value, data, nonce, type) {
-    if (!ethers.utils.isAddress(to)) {
-        throw new Error('Missing to address');
-    }
-    if (!max) {
-        throw new Error('Missing or invalid max fee');
-    }
-    if (!limit || limit < 21000) {
-        throw new Error('Missing or invalid gas limit');
-    }
-    if (nonce == null || nonce < 0) {
-        throw new Error('Missing or invalid nonce');
-    }
-    if (type != null) {
-        if (type !== 0 && type !== 2) {
-            throw new Error('Type must be 0 or 2');
-        }
-    }
-    else {
-        type = 2;
-    }
-    max = ethers.utils.parseUnits(max.toString(), 'gwei');
-    value = value ? ethers.utils.parseEther(value.toString()) : ethers.BigNumber.from(0);
 
-    if (type === 2) {
-        return {
-            to,
-            maxFeePerGas: max,
-            maxPriorityFeePerGas: prio ? ethers.utils.parseUnits(prio.toString(), 'gwei') : max,
-            gasLimit: limit,
-            value,
-            type: type == null ? 2 : type,
-            data: data || '0x',
-            chainId: 1,
-            nonce,
-        };
-    }
-    else {
-        return {
-            to,
-            gasPrice: max,
-            gasLimit: limit,
-            value,
-            type: type == null ? 2 : type,
-            data: data || '0x',
-            chainId: 1,
-            nonce,
-        };
-    }
-}
-
-// Formats and prints transaction
-function printTx(tx = {}) {
-    if (!tx) {
-        throw new Error('Missing tx');
-    }
-    console.log(JSON.stringify({
-        ...tx,
-        gasPrice: tx.gasPrice ? ethers.utils.formatUnits(tx.gasPrice, 'gwei') : null,
-        maxFeePerGas: tx.maxFeePerGas ? ethers.utils.formatUnits(tx.maxFeePerGas, 'gwei') : null,
-        maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? ethers.utils.formatUnits(tx.maxPriorityFeePerGas, 'gwei') : null,
-        value: tx.value ? ethers.utils.formatEther(tx.value) : '0',
-    }, null, 2));
-}
-
-// Encodes transaction
-function encodeTx(tx = {}) {
-    if (!tx) {
-        throw new Error('Missing tx');
-    }
-    if (tx.type == null) {
-        throw new Error('Missing tx type');
-    }
-
-    let serialized;
-    if (tx.type === 0) {
-        serialized = ethers.utils.serializeTransaction({
-            to: tx.to,
-            data: tx.data,
-            gasPrice: tx.gasPrice,
-            gasLimit: tx.gasLimit,
-            chainId: tx.chainId,
-            nonce: tx.nonce,
-            value: tx.value
-        }, {
-            r: tx.r,
-            s: tx.s,
-            v: tx.v
-        });
-    }
-    else {
-        serialized = ethers.utils.serializeTransaction({
-            to: tx.to,
-            data: tx.data,
-            maxFeePerGas: tx.maxFeePerGas,
-            maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
-            gasLimit: tx.gasLimit,
-            accessList: tx.accessList || [],
-            type: 2,
-            chainId: tx.chainId,
-            nonce: tx.nonce,
-            value: tx.value
-        }, {
-            r: tx.r,
-            s: tx.s,
-            v: tx.v
-        });
-    }
-
-    const hash = ethers.utils.keccak256(serialized);
-    if (tx.hash && hash !== tx.hash) {
-        throw new Error('Serialization failed for tx ' + tx.hash + ': ' + serialized);
-    }
-
-    return serialized.toString();
-}
-
-// Encodes transaction data
-function encodeTxData(fnSig, params) {
-    if (!fnSig || !fnSig.includes('(') || !fnSig.includes(')')) {
-        throw new Error('Missing or invalid function signature');
-    }
-    const abi = [(fnSig.startsWith('function') ? '' : 'function ') + fnSig];
-    const iface = new ethers.utils.Interface(abi);
-    const sig = iface.fragments[0].format();
-    try {
-        return iface.encodeFunctionData(sig, params);
-    }
-    catch (err) {
-        throw new Error('Invalid parameters for function signature: ' + err.message);
-    }
-}
-
-function getTxCost(tx) {
-    if (!tx) {
-        throw new Error('Missing tx');
-    }
-    if (tx.type == null) {
-        throw new Error('Missing tx type');
-    }
-    if (tx.type === 2) {
-        return tx.maxFeePerGas.add(tx.maxPriorityFeePerGas).mul(tx.gasLimit).add(tx.value);
-    }
-    else {
-        return tx.gasPrice.mul(tx.gasLimit).add(tx.value);
-    }
-}
 
 // Returns address balance and nonce
 async function getAddressDetails(provider, address) {
@@ -246,65 +97,6 @@ async function getAddressDetails(provider, address) {
     };
 }
 
-async function getContractAbi(address) {
-    const { etherscan } = await file.readConfigs();
-    if (!etherscan) {
-        throw new Error('Missing etherscan key');
-    }
-    if (!ethers.utils.isAddress(address)) {
-        throw new Error('Missing address');
-    }
-    const response = await got.get('https://api.etherscan.io/api?module=contract&action=getabi&address=' + address + '&apikey=' + etherscan, { 
-        responseType: 'json', 
-        timeout: 6000, 
-        retry: 0 
-    });
-    const body = response.body;
-    if (body.status !== '1') {
-        throw new Error('Failed to retrieve contract abi: ' + body.message);
-    }
-    const abi = body.result;
-    if (!abi || abi === 'Contract source code not verified') {
-        throw new Error('Contract is not verified');
-    }
-    return JSON.parse(abi);
-}
-
-async function getContractSourceCode(address) {
-    const { etherscan } = await file.readConfigs();
-    if (!etherscan) {
-        throw new Error('Missing etherscan key');
-    }
-    if (!ethers.utils.isAddress(address)) {
-        throw new Error('Missing address');
-    }
-
-    const response = await got.get('https://api.etherscan.io/api?module=contract&action=getsourcecode&address=' + address + '&apikey=' + etherscan, { 
-        responseType: 'json', 
-        timeout: 6000, 
-        retry: 0 
-    });
-    const body = response.body;
-    if (body.status !== '1') {
-        throw new Error('Failed to retrieve contract source code: ' + body.message);
-    }
-    const details = body.result;
-    if (!Array.isArray(details) || details.length === 0) {
-        throw new Error('Contract is not verified');
-    }
-    const first = details[0].SourceCode;
-    const code = JSON.parse(first.substring(1, first.length - 1));
-    if (!code) {
-        throw new Error('Missing source code');
-    }
-    const contracts = [];
-    for (const [name, value] of Object.entries(code.sources)) {
-        const split = name.split('/');
-        contracts.push({ name: split[split.length - 1], code: value.content });
-    }
-    return contracts;
-}
-
 module.exports = {
     getAlchemyWsProv,
     getAlchemyHttpProv,
@@ -319,12 +111,5 @@ module.exports = {
     getWsProv,
     getHttpProv,
     getHttpsProv,
-    createTx,
-    printTx,
-    encodeTx,
-    getTxCost,
-    encodeTxData,
-    getAddressDetails,
-    getContractAbi,
-    getContractSourceCode
+    getAddressDetails
 };

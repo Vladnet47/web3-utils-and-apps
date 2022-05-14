@@ -4,4 +4,6 @@ module.exports = {
     ...require('./mempool'),
     ...require('./flashbots'),
     ...require('./scan'),
+    ...require('./contract'),
+    ...require('./transaction'),
 };
