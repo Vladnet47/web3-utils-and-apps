@@ -92,9 +92,21 @@ async function simulate(provider, tx) {
     }
 }
 
+// Simulates provided tx against latest block
+async function estimateGas(provider, tx) {
+    if (!provider) {
+        throw new Error('Missing provider');
+    }
+    if (!tx) {
+        throw new Error('Missing tx');
+    }
+    return await provider.estimateGas(tx, 'latest');
+}
+
 module.exports = {
     sendOnPending,
     sendOnLive,
     send,
     simulate,
+    estimateGas,
 };

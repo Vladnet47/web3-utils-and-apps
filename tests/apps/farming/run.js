@@ -5,7 +5,7 @@ const PolicyManager = require('../../../src/apps/farming/policy-manager');
 const CancelManager = require('../../../src/apps/farming/cancel-manager');
 const { getNftyHttpsProv, LooksRequests } = require('../../../src/utils');
 const { Token, Listing } = require('../../../src/apps/farming/objects');
-const { createLooksrareBuyTx } = require('./utils');
+const { createLooksrareBuyTx, createGemBuyTx } = require('./utils');
 
 //0xae10552105783ae94523d87b4a1c947c13e254b7903892237fed2a282ab4071b -> batchBuyWithETH
 //0x2e4e2d8991cb62e88d0bae051e39bd65763d9f7e95005615bf0deec23eeb0510 -> batchBuyWithERC20s
@@ -20,7 +20,7 @@ async function main() {
     const prov = await getNftyHttpsProv();
     const signerManager = new SignerManager(prov);
     const policyManager = new PolicyManager(SAVE_PATH);
-    const cancelManager = new CancelManager(signerManager, prov);
+    const cancelManager = new CancelManager(signerManager);
     const looksRequests = new LooksRequests(false);    
     await Promise.all([
         signerManager.load(),
@@ -37,6 +37,8 @@ async function main() {
         //testInsTooLow,
         //testMatchAskWithTakerBidUsingETHAndWETH,
         //testBatchBuyWithETH,
+        //testBatchBuyWithETHGroupInsTooLow,
+        testBatchBuyWithETH
     ];
 
     for (const test of tests) {
@@ -92,17 +94,46 @@ async function testBatchBuyWithETHGroupInsTooLow(prov, farmingCont, sm, pm) {
     if (!prov || !farmingCont || !sm || !pm) {
         throw new Error('Missing required parameters');
     }
+    const tokens = [
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45101),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45102),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45103),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45104),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45105),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45106),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45107),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45109),
+    ];
     pm.clear();
-    const kai = sm.getAddress('kai');
-    pm.add(kai, new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108), ethers.utils.parseEther('0.1'));
-
-    const hash = '0xae10552105783ae94523d87b4a1c947c13e254b7903892237fed2a282ab4071b';
-    const tx = await prov.getTransaction(hash);
+    for (const token of tokens) {
+        pm.add(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001'));
+    }
+    const tx = createGemBuyTx(tokens.map((token, i) => new Listing(token, i)), 400, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
 
 async function testBatchBuyWithETH(prov, farmingCont, sm, pm) {
-
+    if (!prov || !farmingCont || !sm || !pm) {
+        throw new Error('Missing required parameters');
+    }
+    const tokens = [
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45101),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45102),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45103),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45104),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45105),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45106),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45107),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108),
+        new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45109), 
+    ];
+    pm.clear();
+    for (const token of tokens) {
+        pm.add(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.001'));
+    }
+    const tx = createGemBuyTx(tokens.map((token, i) => new Listing(token, i)), 400, 1);
+    await farmingCont.frontrunSaleTx(tx);
 }
 
 main().catch(console.log);

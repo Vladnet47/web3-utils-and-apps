@@ -1,5 +1,5 @@
 const ethers = require('ethers');
-const { getNftyHttpsProv, decodeTx } = require('../../src/utils');
+const { getNftyHttpsProv, decodeTx } = require('../../../src/utils');
 
 const TX_HASH = '0xae10552105783ae94523d87b4a1c947c13e254b7903892237fed2a282ab4071b'; // batchBuyWithETH
 process.env.PATH_TO_CONFIGS = '/home/vdog/workspace/private/web3-utils/configs.json';
@@ -30,6 +30,8 @@ async function main() {
     const decoded = await decodeTx(IFACE, tx);
     const decodedData = decoded.args;
     const tradeDetails = decodedData.tradeDetails;
+    //console.log(decodedData);
+    //return;
 
     const firstTrade = tradeDetails[0];
     const marketId = firstTrade.marketId.toString();
@@ -42,7 +44,7 @@ async function main() {
     const tdParams = tradeData.substring(10);
     const indivParams = tdParams.match(/.{1,64}/g);
     const indivParamsNum = indivParams.map(p => ethers.BigNumber.from('0x' + p).toString());
-    console.log(JSON.stringify(indivParamsNum, null, 2));
+    console.log(JSON.stringify(indivParams, null, 2));
 
 }
 

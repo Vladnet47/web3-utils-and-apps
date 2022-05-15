@@ -1,10 +1,10 @@
 const { ethers } = require('ethers');
-const { getFrontrunFee, getBaseFee, calcPrioFee } = require('../../utils');
+const { getFrontrunFee, calcPrioFee, estimateGas } = require('../../utils');
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a'.toLowerCase();
 const LOOKS_IFACE = new ethers.utils.Interface(['function cancelMultipleMakerOrders(uint256[] orderNonces) payable returns()']);
-const BASE_GAS_LIMIT = 60000;
-const PER_GAS_LIMIT = 10000;
+const BASE_GAS_LIMIT = 70000;
+const PER_GAS_LIMIT = 25000;
 
 // Manages running tasks for policies. Responsible for creating optimal transactions
 // for cancelling token listings that someone is actively trying to purchase
