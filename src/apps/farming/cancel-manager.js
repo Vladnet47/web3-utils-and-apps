@@ -9,15 +9,11 @@ const PER_GAS_LIMIT = 10000;
 // Manages running tasks for policies. Responsible for creating optimal transactions
 // for cancelling token listings that someone is actively trying to purchase
 class CancelManager {
-    constructor(signerManager, provider) {
+    constructor(signerManager) {
         if (!signerManager) {
             throw new Error('Missing signer manager');
         }
-        if (!provider) {
-            throw new Error('Missing provider');
-        }
         this._sm = signerManager;
-        this._prov = provider;
         this._requests = new Map();
     }
 
@@ -61,7 +57,7 @@ class CancelManager {
     }
 
     // Returns list of cancel txs to submit with their signers
-    async getTxs(baseFee) {
+    getTxs(baseFee) {
         if (!baseFee || !baseFee._isBigNumber) {
             throw new Error('Missing or invalid base fee');
         }
@@ -73,27 +69,26 @@ class CancelManager {
         const userRequests = new Map();
         for (const request of this._requests.values()) {
             if (userRequests.has(request.user)) {
-                userRequests.get(request.user).requests.push(request);
+                userRequests.get(request.user).push(request);
             }
             else {
-                userRequests.set(request.user, { nonce: null, requests: [request] });
+                userRequests.set(request.user, [request]);
             }
         }
 
-        // Update wallet nonces
-        const prov = this._prov;
-        await Promise.all(Array.from(userRequests.keys()).map(user => (async () => {
-            userRequests.get(user).nonce = await prov.getTransactionCount(user, 'latest');
-        })()));
-
         // Create bundle of cancel transactions, one group of cancels for each user
         const bundle = [];
-        for (const [user, { nonce, requests }] of userRequests.entries()) {
+        for (const [user, requests] of userRequests.entries()) {
             const listingNonces = [];
             const listings = [];
             for (const r of requests) {
                 listingNonces.push(r.listing.nonce);
                 listings.push(r.listing);
+            }
+
+            const nonce = this._sm.getNonce(user);
+            if (nonce == null) {
+                throw new Error('Missing nonce for ' + user);
             }
 
             // Get max prio fee of batch and use that as frontrunning fee

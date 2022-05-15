@@ -34,19 +34,33 @@ class FarmingController {
         this._pm = policyManager;
         this._cm = cancelManager;
         this._req = requests;
+        this._baseFee = null;
+    }
+
+    async syncBaseFee(blockNumber) {
+        const block = await this._prov.getBlock(blockNumber || 'latest');
+        if (!block) {
+            throw new Error('Failed to retrieve block');
+        }
+        this._baseFee = block.baseFeePerGas;
     }
 
     async frontrunSaleTx(saleTx) {
         if (!saleTx) {
             throw new Error('Missing tx');
         }
+        if (!this._baseFee) {
+            await this.syncBaseFee();
+        }
 
         // Parse transaction
         const hash = saleTx.hash;
         const maxFee = saleTx.maxFeePerGas || saleTx.gasPrice;
         const prioFee = saleTx.maxPriorityFeePerGas;
-        const baseFee = await getBaseFee(this._prov);
+        const baseFee = this._baseFee;
         const orders = this.parseTx(saleTx);
+        const notifyTx = this._notifyTx;
+        const debug = this._debug;
 
         // Check if transaction matches known policies and add to task manager
         for (const order of orders) {
@@ -60,7 +74,7 @@ class FarmingController {
         }
 
         // Get updated cancel transactions to send
-        const bundle = await this._cm.getTxs(baseFee);
+        const bundle = this._cm.getTxs(baseFee);
         const notifs = [];
 
         // Make sure cancel transaction don't exceed insurance policies
@@ -68,10 +82,17 @@ class FarmingController {
         for (const { user, listings, transaction } of bundle) {
             const tokens = listings.map(l => l.token);
             const insurance = this._pm.getInsurance(tokens);
+            const balance = this._sm.getBalance(user);
             const cost = getTxCost(transaction);
             if (cost.gt(insurance)) {
-                notifs.push(notifyTx(user, tokens, true, 'Insurance policy too low for ' + ethers.utils.formatEther(txFee) + 'Ξ', hash))
-                console.log(user + ' failed to cuck because insurance too low for ' + ethers.utils.formatEther(txFee) + 'Ξ');
+                notifs.push(notifyTx(user, tokens, false, 'Insurance policy too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(insurance) + 'Ξ', hash))
+                console.log(user + ' failed to cuck because insurance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(insurance) + 'Ξ');
+                console.log(JSON.stringify(listings, null, 2));
+                console.log(printTx(transaction));
+            }
+            else if (cost.gt(balance)) {
+                notifs.push(notifyTx(user, tokens, false, 'Wallet balance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(balance) + 'Ξ', hash))
+                console.log(user + ' failed to cuck because wallet balance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(balance) + 'Ξ');
                 console.log(JSON.stringify(listings, null, 2));
                 console.log(printTx(transaction));
             }
@@ -81,11 +102,9 @@ class FarmingController {
         }
 
         // Send transactions and record successes/fails
-        const notifyTx = this._notifyTx;
-        const debug = this._debug;
         const sm = this._sm;
         await Promise.all(cancelBundle.map(({ user, transaction, tokens }) => (async () => {
-            const signer = sm.get(user);
+            const signer = sm.getSigner(user);
             let success;
             if (debug) {
                 console.log('Simulating cancel tx, frontrunning ' + hash + '...');
