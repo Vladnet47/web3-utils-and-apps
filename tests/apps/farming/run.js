@@ -36,7 +36,7 @@ async function main() {
         //testBalTooLow,
         //testInsTooLow,
         //testMatchAskWithTakerBidUsingETHAndWETH,
-        testBatchBuyWithETHGroupInsTooLow,
+        //testBatchBuyWithETHGroupInsTooLow,
         //testBatchBuyWithETH
     ];
 
