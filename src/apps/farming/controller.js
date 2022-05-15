@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
-const { getTxCost, createTx, printTx, send, simulate, notify, decodeTx, getAddressDetails, getFrontrunFee } = require('../../utils');
+const { getTxCost, printTx, send, simulate, notify, decodeTx, getBaseFee } = require('../../utils');
+const { Listing, Token } = require('./objects');
 
-const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a'.toLowerCase();
 const IFACE = new ethers.utils.Interface([
     'function matchAskWithTakerBidUsingETHAndWETH((bool,address,uint256,uint256,uint256,bytes),(bool,address,address,uint256,uint256,uint256,address,address,uint256,uint256,uint256,uint256,bytes,uint8,bytes32,bytes32)) payable returns()',
     'function matchAskWithTakerBid((bool,address,uint256,uint256,uint256,bytes),(bool,address,address,uint256,uint256,uint256,address,address,uint256,uint256,uint256,uint256,bytes,uint8,bytes32,bytes32)) payable returns()',
@@ -10,13 +10,17 @@ const IFACE = new ethers.utils.Interface([
     'function batchBuyWithETH(tuple(uint256 marketId, uint256 value, bytes tradeData)[] tradeDetails) payable',
     'function batchBuyWithERC20s(tuple(address[] tokenAddrs, uint256[] amounts) erc20Details, tuple(uint256 marketId, uint256 value, bytes tradeData)[] tradeDetails, tuple(bytes conversionData)[] converstionDetails, address[] dustTokens) payable',
 ]);
-const LOOKS_IFACE = new ethers.utils.Interface(['function cancelMultipleMakerOrders(uint256[] orderNonces) payable returns()']);
-const GAS_LIMIT = 70000;
 
 class FarmingController {
-    constructor(signerManager, policyManager, requests, debug) {
+    constructor(provider, signerManager, policyManager, cancelManager, requests, debug) {
+        if (!provider) {
+            throw new Error('Missing provider');
+        }
         if (!signerManager) {
             throw new Error('Missing signer manager');
+        }
+        if (!cancelManager) {
+            throw new Error('Missing task manager');
         }
         if (!policyManager) {
             throw new Error('Missing policy manager');
@@ -25,162 +29,178 @@ class FarmingController {
             throw new Error('Missing looksrare requests module');
         }
         this._debug = debug !== false;
-        this._pm = policyManager;
+        this._prov = provider;
         this._sm = signerManager;
+        this._pm = policyManager;
+        this._cm = cancelManager;
         this._req = requests;
     }
 
-    async frontrunSaleTx(tx) {
-        // Parse transaction data
-        const { from, tokenId, tokenContract, listingNonce } = this.parseTx(tx);
-        if (!from) {
-            throw new Error('Not an applicable sale');
-        }
-        if (!this._pm.hasActive(from, tokenContract, tokenId)) {
-            throw new Error('No active policies matched');
-        }
-        const { insurance } = this._pm.get(from, tokenContract, tokenId);
-
-        // Build cancel transaction
-        const signer = this._sm.get(from);
-        const { maxFee, prioFee } = getFrontrunFee(tx.maxFeePerGas || tx.gasPrice, tx.maxPriorityFeePerGas);
-        const { balance, nonce } = await getAddressDetails(signer.provider, signer.address);
-        const cancelTx = createTx(
-            LOOKS_ADDRESS, 
-            ethers.utils.formatUnits(maxFee, 'gwei'), 
-            ethers.utils.formatUnits(prioFee, 'gwei'), 
-            GAS_LIMIT,
-            null, 
-            LOOKS_IFACE.encodeFunctionData('cancelMultipleMakerOrders', [[listingNonce]]), 
-            nonce, 
-            tx.type
-        );
-
-        // Make sure insurance fee is acceptable
-        const txFee = getTxCost(cancelTx);
-        if (txFee.gt(insurance)) {
-            await this._notifyTx(from, tokenContract, tokenId, false, 'Insurance policy too low for ' + ethers.utils.formatEther(txFee) + 'Ξ');
-            throw new Error('Insurance policy too low');
-        }
-        else if (txFee.gt(balance)) {
-            await this._notifyTx(from, tokenContract, tokenId, false, 'Wallet balance too low for ' + ethers.utils.formatEther(txFee) + 'Ξ');
-            throw new Error('Wallet balance too low');
+    async frontrunSaleTx(saleTx) {
+        if (!saleTx) {
+            throw new Error('Missing tx');
         }
 
-        // Send cancellation tx
-        let success;
-        if (this._debug) {
-            console.log('Simulating cancel tx, frontrunning ' + tx.hash + '...');
-            console.log(printTx(cancelTx));
-            success = await simulate(signer.provider, cancelTx);
-        }
-        else {
-            console.log('Sending cancel tx, frontrunning ' + tx.hash + '...');
-            console.log(printTx(cancelTx));
-            success = await send(signer, cancelTx);
+        // Parse transaction
+        const hash = saleTx.hash;
+        const maxFee = saleTx.maxFeePerGas || saleTx.gasPrice;
+        const prioFee = saleTx.maxPriorityFeePerGas;
+        const baseFee = await getBaseFee(this._prov);
+        const orders = this.parseTx(saleTx);
+
+        // Check if transaction matches known policies and add to task manager
+        for (const order of orders) {
+            if (this._pm.hasActive(order.token)) {
+                const policy = this._pm.get(order.token);
+                this._cm.add(policy.user, order, baseFee, maxFee, prioFee);
+            }
+            else {
+                console.log(hash + ' ' + order.token.tokenId + ' (' + order.nonce + ') did not match any active policies');
+            }
         }
 
-        this._pm.stop(from, tokenContract, tokenId);
+        // Get updated cancel transactions to send
+        const bundle = await this._cm.getTxs(baseFee);
+        const notifs = [];
 
-        if (success) {
-            console.log(tx.hash + ' successfully frontran!');
-            console.log(printTx(cancelTx));
-            await this._notifyTx(from, tokenContract, tokenId, true, 'Projected fees: ' + ethers.utils.formatEther(txFee) + 'Ξ', tx.hash, cancelTx.hash);
+        // Make sure cancel transaction don't exceed insurance policies
+        const cancelBundle = [];
+        for (const { user, listings, transaction } of bundle) {
+            const tokens = listings.map(l => l.token);
+            const insurance = this._pm.getInsurance(tokens);
+            const cost = getTxCost(transaction);
+            if (cost.gt(insurance)) {
+                notifs.push(notifyTx(user, tokens, true, 'Insurance policy too low for ' + ethers.utils.formatEther(txFee) + 'Ξ', hash))
+                console.log(user + ' failed to cuck because insurance too low for ' + ethers.utils.formatEther(txFee) + 'Ξ');
+                console.log(JSON.stringify(listings, null, 2));
+                console.log(printTx(transaction));
+            }
+            else {
+                cancelBundle.push({ user, transaction, tokens });
+            }
         }
-        else {
-            console.log(tx.hash + ' failed to frontrun!');
-            console.log(printTx(cancelTx));
-            await this._notifyTx(from, tokenContract, tokenId, false, 'Projected fees: ' + ethers.utils.formatEther(txFee) + 'Ξ', tx.hash, cancelTx.hash);
-        }
+
+        // Send transactions and record successes/fails
+        const notifyTx = this._notifyTx;
+        const debug = this._debug;
+        const sm = this._sm;
+        await Promise.all(cancelBundle.map(({ user, transaction, tokens }) => (async () => {
+            const signer = sm.get(user);
+            let success;
+            if (debug) {
+                console.log('Simulating cancel tx, frontrunning ' + hash + '...');
+                console.log(printTx(transaction));
+                success = await simulate(signer.provider, transaction);
+            }
+            else {
+                console.log('Sending cancel tx, frontrunning ' + hash + '...');
+                console.log(printTx(cancelTx));
+                success = await send(signer, transaction);
+            }
+
+            if (success) {
+                console.log(hash + ' successfully frontran!');
+                notifs.push(notifyTx(user, tokens, true, null, hash));
+            }
+            else {
+                console.log(hash + ' failed to frontrun!');
+                notifs.push(notifyTx(user, tokens, false, null, hash));
+            }
+
+            for (const token of tokens) {
+                this._pm.stop(token);
+            }
+        })()));
+
+        await Promise.all(notifs);
     }
 
     parseTx(tx) {
-        return {
-            from: '0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d',
-            tokenContract: '0x34d85c9cdeb23fa97cb08333b511ac86e1c4e258',
-            tokenId: 81312,
-            listingNonce: 23,
-        };
+        // return {
+        //     tokenContract: '0x34d85c9cdeb23fa97cb08333b511ac86e1c4e258',
+        //     tokenId: 81312,
+        //     listingNonce: 23,
+        // };
         try {
             const { args, name } = decodeTx(IFACE, tx);
             switch (name) {
-                case 'matchAskWithTakerBidUsingETHAndWETH': {
-                    // Looksrare regular buy
-                    const takerBid = args[0];
-                    const makerAsk = args[1];
-                    return {
-                        to: takerBid[1],
-                        from: makerAsk[1],
-                        tokenContract: makerAsk[2],
-                        tokenId: takerBid[3].toString(),
-                        listingNonce: makerAsk[8].toString(),
-                    };
-                }
+                case 'matchAskWithTakerBidUsingETHAndWETH':
                 case 'matchAskWithTakerBid': {
-                    // Looksrare buy
                     const takerBid = args[0];
                     const makerAsk = args[1];
-                    return {
-                        to: takerBid[1],
-                        from: makerAsk[1],
-                        tokenContract: makerAsk[2],
-                        tokenId: takerBid[3].toString(),
-                        listingNonce: makerAsk[8].toString(),
-                    };
-                }
-                case 'matchBidWithTakerAsk': {
-                    // This represents an offer that has been accepted by owner. Don't frontrun this
-                    const takerBid = args[0];
-                    const makerAsk = args[1];
-                    return {
-                        // to: makerAsk[1],
-                        // from: takerBid[1],
-                        // tokenContract: makerAsk[2],
-                        // tokenId: takerBid[3].toString(),
-                        // listingNonce: makerAsk[8].toString(),
-                    };
+                    return [new Listing(
+                        new Token(
+                            makerAsk[2], 
+                            takerBid[3].toString()
+                        ), 
+                        makerAsk[8].toString()
+                    )];
                 }
                 case 'batchBuyWithETH': {
+                    const orders = [];
+
                     // Gem regular buy on looksrare
-                    this._printDebug(args);
+                    const tradeDetails = args[0];
+                    for (const tradeDetail of tradeDetails) {
+                        // Ensure that correct proxy is being called
+                        if (tradeDetail.marketId.toString() !== '16') {
+                            continue;
+                        }
 
-                    return {
-                        // to: makerAsk[1],
-                        // from: takerBid[1],
-                        // tokenContract: makerAsk[2],
-                        // tokenId: takerBid[3],
-                        // listingNonce: makerAsk[8],
-                    };
-                }
-                case 'batchBuyWithERC20s': {
-                    this._printDebug(args);
+                        // Ensure the correct function on proxy is being called
+                        const td = tradeDetail.tradeData.toString();
+                        const tdHash = td.substring(0, 10).toLowerCase();
+                        if (tdHash !== '0xf3e81623') {
+                            continue;
+                        }
 
-                    return {
-                        // to: makerAsk[1],
-                        // from: takerBid[1],
-                        // tokenContract: makerAsk[2],
-                        // tokenId: takerBid[3],
-                        // listingNonce: makerAsk[8],
-                    };
+                        // Split into array of 64-length params
+                        const tdParams = td.substring(10).match(/.{1,64}/g);
+
+                        // Parse individual sales
+                        for (let i = 3; i < tdParams.length; i += 13) {
+                            orders.push(new Listing(
+                                new Token(
+                                    '0x' + tdParams[i + 12].substring(24), 
+                                    ethers.BigNumber.from('0x' + tdParams[i + 2]).toString()
+                                ), 
+                                ethers.BigNumber.from('0x' + tdParams[i + 4]).toString()
+                            ));
+                        }
+                    }
+
+                    return orders;
                 }
-                default: return {};
+                case 'matchBidWithTakerAsk': // Looksrare accept bid
+                case 'batchBuyWithERC20s':
+                default: return [];
             }
         }
         catch (err) {
-            return {};
+            console.log('Failed to parse tx: ' + err.message);
+            console.log(err.stack);
+            return [];
         }
     }
 
-    async _notifyTx(user, contract, tokenId, success, description, targetHash, cancelHash) {
-        if (!user || !contract || tokenId == null || success == null) {
+    async _notifyTx(user, tokens, success, description, targetHash, cancelHash) {
+        if (!user || !tokens || success == null) {
             throw new Error('Missing required parameters');
         }
+
+        let tokenIds = tokens[0].tokenId;
+        let listings = '[' + tokens[0].tokenId + '](https://looksrare.org/collections/' + tokens[0].address + '/' + tokens[0].tokenId + ')';
+        for (let i = 1; i < tokens.length; ++i) {
+            tokenIds += ', ' + tokens[i].tokenId;
+            listings += '\n' + '[' + tokens[i].tokenId + '](https://looksrare.org/collections/' + tokens[i].address + '/' + tokens[i].tokenId + ')';
+        }
+
         await notify(
-            user + (success ? ' successfully cucked sale of token ' : ' failed to cuck sale of token ') + tokenId, 
+            user + (success ? ' successfully cucked sale of token ' : ' failed to cuck sale of token ') + tokenIds, 
             cancelHash ? 'https://etherscan.io/tx/' + cancelHash : null,
             (description ? description + '\n' : '') + 
-            (targetHash ? '[**Cucked Tx**](https://etherscan.io/tx' + targetHash + ')\n' : '') +
-            '[Listing](https://looksrare.org/collections/' + contract + '/' + tokenId + ')',
+            (targetHash ? '[**Cucked Tx**](https://etherscan.io/tx/' + targetHash + ')\n' : '') +
+            listings,
             success ? 0x0BDA51 : 0xC70039,
         );
     }

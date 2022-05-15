@@ -1,5 +1,6 @@
 const ethers = require('ethers');
-const { isNumeric, readCsv, writeCsv, existsFile } = require('../../utils');
+const { readCsv, writeCsv, existsFile } = require('../../utils');
+const { Token } = require('./objects');
 
 class PolicyManager {
     constructor(savePath) {
@@ -19,7 +20,7 @@ class PolicyManager {
         if (await existsFile(this._savePath)) {
             const policies = await readCsv(this._savePath);
             for (const policy of policies) {
-                this.add(policy.user, policy.contract, policy.tokenId, ethers.utils.parseEther(policy.insurance));
+                this.add(policy.user, new Token(policy.contract, policy.tokenId), ethers.utils.parseEther(policy.insurance));
             }
         }
         console.log('Loaded ' + this._policies.size + ' policies from storage');
@@ -28,83 +29,91 @@ class PolicyManager {
     async save() {
         let csv = 'user,contract,tokenId,insurance';
         for (const policy of this._policies.values()) {
-            csv += '\n' + policy.user + ',' + policy.contract + ',' + policy.tokenId + ',' + ethers.utils.formatEther(policy.insurance);
+            csv += '\n' + policy.user + ',' + policy.token.contract + ',' + policy.token.tokenId + ',' + ethers.utils.formatEther(policy.insurance);
         }
         await writeCsv(this._savePath, csv);
         console.log('Updated ' + this._policies.size + ' policies in storage');
     }
 
-    has(user, contract, tokenId) {
-        const id = this._getId(user, contract, tokenId);
-        return this._policies.has(id);
+    clear() {
+        this._policies.clear();
     }
 
-    hasActive(user, contract, tokenId) {
-        const id = this._getId(user, contract, tokenId);
-        const policy = this._policies.get(id);
+    has(token) {
+        if (!token) {
+            throw new Error('Missing token');
+        }
+        return this._policies.has(token.id);
+    }
+
+    hasActive(token) {
+        if (!token) {
+            throw new Error('Missing token');
+        }
+        const policy = this._policies.get(token.id);
         return policy && policy.running;
     }
 
-    start(user, contract, tokenId) {
-        const policy = this.get(user, contract, tokenId);
+    start(token) {
+        const policy = this.get(token);
         if (!policy.running) {
             policy.running = true;
-            console.log('Started policy ' + policy.id);
+            console.log('Started policy ' + token.id);
         }
     }
 
-    stop(user, contract, tokenId) {
-        const policy = this.get(user, contract, tokenId);
+    stop(token) {
+        const policy = this.get(token);
         if (policy.running) {
             policy.running = false;
-            console.log('Stopped policy ' + policy.id);
+            console.log('Stopped policy ' + token.id);
         }
     }
 
-    get(user, contract, tokenId) {
-        const id = this._getId(user, contract, tokenId);
-        const policy = this._policies.get(id);
+    get(token) {
+        const policy = this._policies.get(token.id);
         if (!policy) {
             throw new Error('Policy ' + id + ' does not exist');
         }
         return policy;
     }
 
-    add(user, contract, tokenId, insurance) {
-        if (!insurance || !insurance._isBigNumber) {
-            throw new Error('Missing or invalid insurance');
+    getInsurance(tokens) {
+        if (!Array.isArray(tokens)) {
+            throw new Error('Missing token batch');
         }
-        const id = this._getId(user, contract, tokenId);
-        this._policies.set(id, {
-            id,
-            user: user.toLowerCase(),
-            contract: contract.toLowerCase(),
-            tokenId,
-            insurance,
-            running: true,
-        });
-        console.log('Updated policy ' + id + ' with insurance ' + ethers.utils.formatEther(insurance));
+        let insurance = ethers.BigNumber.from(0);
+        for (const token of tokens) {
+            const policy = this.get(token);
+            insurance = insurance.add(policy.insurance);
+        }
+        return insurance;
     }
 
-    remove(user, contract, tokenId) {
-        const id = this._getId(user, contract, tokenId);
-        if (this._policies.has(id)) {
-            this._policies.delete(id);
-        }
-        console.log('Removed policy ' + id);
-    }
-
-    _getId(user, contract, tokenId) {
+    add(user, token, insurance) {
         if (!user || !ethers.utils.isAddress(user)) {
             throw new Error('Missing or invalid user');
         }
-        if (!contract || !ethers.utils.isAddress(user)) {
-            throw new Error('Missing or invalid token contract');
+        if (!token) {
+            throw new Error('Missing token');
         }
-        if (tokenId == null || !isNumeric(tokenId)) {
-            throw new Error('Missing or invalid token id');
+        if (!insurance || !insurance._isBigNumber) {
+            throw new Error('Missing or invalid insurance');
         }
-        return user.toLowerCase() + '_' + contract.toLowerCase() + '_' + tokenId;
+        this._policies.set(token.id, {
+            user: user.toLowerCase(),
+            token,
+            insurance,
+            running: true,
+        });
+        console.log('Updated policy ' + token.id + ' for user ' + user + ' with insurance ' + ethers.utils.formatEther(insurance));
+    }
+
+    remove(token) {
+        if (this._policies.has(token.id)) {
+            this._policies.delete(token.id);
+            console.log('Removed policy ' + token.id);
+        }
     }
 }
 

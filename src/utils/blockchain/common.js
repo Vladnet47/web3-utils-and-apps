@@ -97,6 +97,37 @@ async function getAddressDetails(provider, address) {
     };
 }
 
+async function getBaseFee(provider) {
+    if (!provider) {
+        throw new Error('Missing provider')
+    }
+    const blockNumber = await provider.getBlockNumber('latest');
+    const block = await provider.getBlock(blockNumber);
+    return block.baseFeePerGas;
+}
+
+function calcPrioFee(baseFee, maxFee, prioFee) {
+    if (!baseFee || !baseFee._isBigNumber) {
+        throw new Error('Missing or invalid base fee');
+    }
+    if (!maxFee || !maxFee._isBigNumber) {
+        throw new Error('Missing or invalid max fee');
+    }
+    if (prioFee && !prioFee._isBigNumber) {
+        throw new Error('Missing or invalid prio fee');
+    }
+    if (maxFee.lte(baseFee)) {
+        return ethers.BigNumber.from(0);
+    }
+    const diff = maxFee.sub(baseFee);
+    if (prioFee && prioFee.lt(diff)) {
+        return prioFee;
+    }
+    else {
+        return diff;
+    }
+}
+
 module.exports = {
     getAlchemyWsProv,
     getAlchemyHttpProv,
@@ -111,5 +142,7 @@ module.exports = {
     getWsProv,
     getHttpProv,
     getHttpsProv,
-    getAddressDetails
+    getAddressDetails,
+    getBaseFee,
+    calcPrioFee
 };
