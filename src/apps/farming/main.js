@@ -30,10 +30,10 @@ async function main() {
     await discordCont.start();
 
     console.log('Starting farming controller in ' + (debug === false ? 'PROD' : 'DEBUG') + ' mode');
-    await run(farmingController);
+    await run(farmingController, signerManager);
 }
 
-async function run(farmingController) {
+async function run(farmingController, signerManager) {
     console.log('(re)starting websocket connections!');
 
     const frontrunSaleTx = async tx => {
@@ -47,12 +47,17 @@ async function run(farmingController) {
         }
     };
 
-    const updateBaseFee = async baseFee => await farmingController.syncBaseFee(baseFee);
+    const updateBlock = async block => {
+        await Promise.all([
+            farmingController.syncBaseFee(block.baseFeePerGas),
+            signerManager.sync(),
+        ]);
+    };
 
     const [closeLooks, closeGems, closeBlocks] = await Promise.all([
         streamPendingTxs(LOOKS_ADDRESS, frontrunSaleTx),
         streamPendingTxs(GEM_ADDRESS, frontrunSaleTx),
-        streamBlocks(updateBaseFee)
+        streamBlocks(updateBlock)
     ]);
 
     // Restart after an hour to prevent socket from timing out
@@ -62,7 +67,7 @@ async function run(farmingController) {
             closeGems(),
             closeBlocks(),
         ]);
-        await run(farmingController);
+        await run(farmingController, signerManager);
     }, WS_RESTART_DELAY);
 }
 
