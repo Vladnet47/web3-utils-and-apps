@@ -48,7 +48,7 @@ async function run(farmingController, signerManager) {
     };
 
     const updateBlock = async block => {
-        console.log('Encountered block ' + block.blockNumber);
+        console.log('Encountered block ' + block.number);
         await Promise.all([
             farmingController.syncBaseFee(block.baseFeePerGas),
             signerManager.sync(),

@@ -56,7 +56,37 @@ async function streamPendingTxs(address, callback) {
     };
 }
 
-// Starts monitoring new block numbers.
+// Starts monitoring new block.
+// Whenever encountered, calls callback.
+// Uses zmok http provider.
+async function streamBlockNumbers(callback, chainId) {
+    if (!callback) {
+        throw new Error('Missing callback');
+    }
+
+    let blockNumber = 0;
+    const prov = await common.getZmokHttpProv(chainId);
+    prov.on('block', async bn => {
+        if (bn && bn > blockNumber) {
+            blockNumber = bn;
+            try {
+                await callback(blockNumber);
+            }
+            catch (err) {
+                console.log('Callback failed: ' + err.message);
+                console.log(err.stack);
+            }
+        }
+    });
+
+    console.log('Started monitoring block numbers');
+    return async () => {
+        await prov.destroy();
+        console.log('Closed block number stream');
+    };
+}
+
+// Starts monitoring new block.
 // Whenever encountered, calls callback.
 // Uses zmok http provider.
 async function streamBlocks(callback, chainId) {
@@ -69,8 +99,17 @@ async function streamBlocks(callback, chainId) {
     prov.on('block', async bn => {
         if (bn && bn > blockNumber) {
             blockNumber = bn;
+            let block;
             try {
-                await callback(bn);
+                block = await prov.getBlock(bn);
+            }
+            catch (err) {
+                console.log('Failed to retrieve full block: ' + err.message);
+                return;
+            }
+
+            try {
+                await callback(block);
             }
             catch (err) {
                 console.log('Callback failed: ' + err.message);
@@ -185,6 +224,7 @@ async function streamConfirmedTxs(address, callback, chainId) {
 
 module.exports = {
     streamPendingTxs,
+    streamBlockNumbers,
     streamBlocks,
     streamFullBlocks,
     streamConfirmedHashes,
