@@ -1,6 +1,7 @@
 *configs.json
 out/*
 .vscode
+*policies.csv
 
 .env
 coverage

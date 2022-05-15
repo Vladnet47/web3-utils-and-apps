@@ -4,16 +4,16 @@ const ethers = require('ethers');
 class Token {
     constructor(address, id) {
         if (!address || !ethers.utils.isAddress(address)) {
-            throw new Error('Missing or invalid address');
+            throw new Error('Missing or invalid token address');
         }
         if (id == null || !isNumeric(id)) {
-            throw new Error('Missing or invalid id');
+            throw new Error('Missing or invalid token id');
         }
         this._address = address.toLowerCase();
         this._tokenId = id.toString();
     }
 
-    get id() {
+    get uniqueId() {
         return this._address + '_' + this._tokenId;
     }
 
@@ -21,7 +21,7 @@ class Token {
         return this._address;
     }
 
-    get tokenId() {
+    get id() {
         return this._tokenId;
     }
 
@@ -36,7 +36,7 @@ class Token {
         if (!token) {
             throw new Error('Missing token');
         }
-        return this._id === token.id;
+        return this.uniqueId === token.uniqueId;
     }
 }
 

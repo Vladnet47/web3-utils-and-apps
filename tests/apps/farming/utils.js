@@ -14,7 +14,7 @@ function createLooksrareBuyTx(listing, maxFee, prioFee) {
     }
 
     const price = ethers.utils.parseEther('0.1');
-    const tokenId = ethers.BigNumber.from(listing.token.tokenId);
+    const tokenId = ethers.BigNumber.from(listing.token.id);
     listingNonce = ethers.BigNumber.from(listing.nonce.toString());
     maxFee = ethers.utils.parseUnits(maxFee.toString(), 'gwei');
     prioFee = ethers.utils.parseUnits(prioFee.toString(), 'gwei');
@@ -78,7 +78,7 @@ function createGemBuyTx(listings, maxFee, prioFee) {
             '0000000000000000000000000000000000000000000000000000000000000000' +
             '000000000000000000000000000000000000000000000000000000000000000' + listings.length;
         for (const listing of listings) {
-            const tokenId = ethers.BigNumber.from(listing.token.tokenId)._hex.substring(2);
+            const tokenId = ethers.BigNumber.from(listing.token.id)._hex.substring(2);
             const tokenContract = listing.token.address.substring(2);
             const listingNonce = ethers.BigNumber.from(listing.nonce)._hex.substring(2);
             data += "0000000000000000000000000000000000000000000000000000000000000001" +

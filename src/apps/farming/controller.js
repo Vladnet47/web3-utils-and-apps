@@ -37,12 +37,18 @@ class FarmingController {
         this._baseFee = null;
     }
 
-    async syncBaseFee(blockNumber) {
-        const block = await this._prov.getBlock(blockNumber || 'latest');
-        if (!block) {
-            throw new Error('Failed to retrieve block');
+    async syncBaseFee(baseFee) {
+        if (!baseFee || !baseFee._isBigNumber) {
+            const block = await this._prov.getBlock('latest');
+            if (!block) {
+                throw new Error('Failed to retrieve block');
+            }
+            this._baseFee = block.baseFeePerGas;
         }
-        this._baseFee = block.baseFeePerGas;
+        else {
+            this._baseFee = baseFee;
+        }
+        console.log('Updated base fee ' + ethers.utils.formatUnits(this._baseFee, 'gwei'));
     }
 
     async frontrunSaleTx(saleTx) {
@@ -69,7 +75,7 @@ class FarmingController {
                 this._cm.add(policy.user, order, baseFee, maxFee, prioFee);
             }
             else {
-                console.log(hash + ' ' + order.token.tokenId + ' (' + order.nonce + ') did not match any active policies');
+                console.log(hash + ' ' + order.token.id + ' (' + order.nonce + ') did not match any active policies');
             }
         }
 
@@ -85,16 +91,18 @@ class FarmingController {
             const balance = this._sm.getBalance(user);
             const cost = getTxCost(transaction);
             if (cost.gt(insurance)) {
-                notifs.push(notifyTx(user, tokens, false, 'Insurance policy too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(insurance) + 'Ξ', hash))
+                notifs.push(notifyTx(this._sm.getName(user), tokens, false, 'Insurance policy too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(insurance) + 'Ξ', hash))
                 console.log(user + ' failed to cuck because insurance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(insurance) + 'Ξ');
-                console.log(JSON.stringify(listings, null, 2));
-                console.log(printTx(transaction));
+                console.log('Listings: ' + JSON.stringify(listings, null, 2));
+                console.log('Transaction:');
+                printTx(transaction)
             }
             else if (cost.gt(balance)) {
-                notifs.push(notifyTx(user, tokens, false, 'Wallet balance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(balance) + 'Ξ', hash))
+                notifs.push(notifyTx(this._sm.getName(user), tokens, false, 'Wallet balance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(balance) + 'Ξ', hash))
                 console.log(user + ' failed to cuck because wallet balance too low: ' + ethers.utils.formatEther(cost) + 'Ξ > ' + ethers.utils.formatEther(balance) + 'Ξ');
-                console.log(JSON.stringify(listings, null, 2));
-                console.log(printTx(transaction));
+                console.log('Listings: ' + JSON.stringify(listings, null, 2));
+                console.log('Transaction:');
+                printTx(transaction)
             }
             else {
                 cancelBundle.push({ user, transaction, tokens });
@@ -108,22 +116,24 @@ class FarmingController {
             let success;
             if (debug) {
                 console.log('Simulating cancel tx, frontrunning ' + hash + '...');
-                console.log(printTx(transaction));
+                console.log('Transaction:');
+                printTx(transaction)
                 success = await simulate(signer.provider, transaction);
             }
             else {
                 console.log('Sending cancel tx, frontrunning ' + hash + '...');
-                console.log(printTx(cancelTx));
+                console.log('Transaction:');
+                printTx(transaction)
                 success = await send(signer, transaction);
             }
 
             if (success) {
                 console.log(hash + ' successfully frontran!');
-                notifs.push(notifyTx(user, tokens, true, null, hash));
+                notifs.push(notifyTx(sm.getName(user), tokens, true, null, hash));
             }
             else {
                 console.log(hash + ' failed to frontrun!');
-                notifs.push(notifyTx(user, tokens, false, null, hash));
+                notifs.push(notifyTx(sm.getName(user), tokens, false, null, hash));
             }
 
             for (const token of tokens) {
@@ -135,11 +145,6 @@ class FarmingController {
     }
 
     parseTx(tx) {
-        // return {
-        //     tokenContract: '0x34d85c9cdeb23fa97cb08333b511ac86e1c4e258',
-        //     tokenId: 81312,
-        //     listingNonce: 23,
-        // };
         try {
             const { args, name } = decodeTx(IFACE, tx);
             switch (name) {
@@ -196,8 +201,8 @@ class FarmingController {
             }
         }
         catch (err) {
-            console.log('Failed to parse tx: ' + err.message);
-            console.log(err.stack);
+            //console.log('Failed to parse tx: ' + err.message);
+            //console.log(err.stack);
             return [];
         }
     }
@@ -207,11 +212,11 @@ class FarmingController {
             throw new Error('Missing required parameters');
         }
 
-        let tokenIds = tokens[0].tokenId;
-        let listings = '[' + tokens[0].tokenId + '](https://looksrare.org/collections/' + tokens[0].address + '/' + tokens[0].tokenId + ')';
+        let tokenIds = tokens[0].id;
+        let listings = '[' + tokens[0].id + '](https://looksrare.org/collections/' + tokens[0].address + '/' + tokens[0].id + ')';
         for (let i = 1; i < tokens.length; ++i) {
-            tokenIds += ', ' + tokens[i].tokenId;
-            listings += '\n' + '[' + tokens[i].tokenId + '](https://looksrare.org/collections/' + tokens[i].address + '/' + tokens[i].tokenId + ')';
+            tokenIds += ', ' + tokens[i].id;
+            listings += '\n' + '[' + tokens[i].id + '](https://looksrare.org/collections/' + tokens[i].address + '/' + tokens[i].id + ')';
         }
 
         await notify(

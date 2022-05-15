@@ -12,7 +12,15 @@ class PolicyManager {
     }
 
     get policies() {
-        return Array.from(this._policies.values());
+        return Array.from(this._policies.values()).sort((a, b) => {
+            const order = (a.user + a.token.address).localeCompare(b.user + b.token.address);
+            if (order === 0) {
+                return a.token.id - b.token.id;
+            }
+            else {
+                return order;
+            }
+        });
     }
 
     // Load policies from storage
@@ -29,7 +37,7 @@ class PolicyManager {
     async save() {
         let csv = 'user,contract,tokenId,insurance';
         for (const policy of this._policies.values()) {
-            csv += '\n' + policy.user + ',' + policy.token.contract + ',' + policy.token.tokenId + ',' + ethers.utils.formatEther(policy.insurance);
+            csv += '\n' + policy.user + ',' + policy.token.address + ',' + policy.token.id + ',' + ethers.utils.formatEther(policy.insurance);
         }
         await writeCsv(this._savePath, csv);
         console.log('Updated ' + this._policies.size + ' policies in storage');
@@ -43,14 +51,14 @@ class PolicyManager {
         if (!token) {
             throw new Error('Missing token');
         }
-        return this._policies.has(token.id);
+        return this._policies.has(token.uniqueId);
     }
 
     hasActive(token) {
         if (!token) {
             throw new Error('Missing token');
         }
-        const policy = this._policies.get(token.id);
+        const policy = this._policies.get(token.uniqueId);
         return policy && policy.running;
     }
 
@@ -58,7 +66,7 @@ class PolicyManager {
         const policy = this.get(token);
         if (!policy.running) {
             policy.running = true;
-            console.log('Started policy ' + token.id);
+            console.log('Started policy ' + token.uniqueId);
         }
     }
 
@@ -66,12 +74,12 @@ class PolicyManager {
         const policy = this.get(token);
         if (policy.running) {
             policy.running = false;
-            console.log('Stopped policy ' + token.id);
+            console.log('Stopped policy ' + token.uniqueId);
         }
     }
 
     get(token) {
-        const policy = this._policies.get(token.id);
+        const policy = this._policies.get(token.uniqueId);
         if (!policy) {
             throw new Error('Policy ' + id + ' does not exist');
         }
@@ -90,6 +98,11 @@ class PolicyManager {
         return insurance;
     }
 
+    getUser(token) {
+        const policy = this.get(token);
+        return policy.user;
+    }
+
     add(user, token, insurance) {
         if (!user || !ethers.utils.isAddress(user)) {
             throw new Error('Missing or invalid user');
@@ -100,19 +113,25 @@ class PolicyManager {
         if (!insurance || !insurance._isBigNumber) {
             throw new Error('Missing or invalid insurance');
         }
-        this._policies.set(token.id, {
+        if (this._policies.has(token.uniqueId)) {
+            const existing = this._policies.get(token.uniqueId);
+            if (user.toLowerCase() !== existing.user) {
+                throw new Error('Policy already registered to another user');
+            }
+        }
+        this._policies.set(token.uniqueId, {
             user: user.toLowerCase(),
             token,
             insurance,
             running: true,
         });
-        console.log('Updated policy ' + token.id + ' for user ' + user + ' with insurance ' + ethers.utils.formatEther(insurance));
+        console.log('Updated policy ' + token.uniqueId + ' for user ' + user + ' with insurance ' + ethers.utils.formatEther(insurance));
     }
 
     remove(token) {
-        if (this._policies.has(token.id)) {
-            this._policies.delete(token.id);
-            console.log('Removed policy ' + token.id);
+        if (this._policies.has(token.uniqueId)) {
+            this._policies.delete(token.uniqueId);
+            console.log('Removed policy ' + token.uniqueId);
         }
     }
 }

@@ -1,4 +1,5 @@
-const { readConfigs, streamPendingTxs, printTx, LooksRequests, getNftyHttpsProv } = require('../../utils');
+const { readConfigs, streamPendingTxs, printTx, LooksRequests, getNftyHttpsProv, streamBlocks } = require('../../utils');
+const CancelManager = require('./cancel-manager');
 const FarmingController = require('./controller');
 const DiscordController = require('./discord');
 const PolicyManager = require('./policy-manager');
@@ -8,35 +9,36 @@ const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const GEM_ADDRESS = '0x83C8F28c26bF6aaca652Df1DbBE0e1b56F8baBa2';
 
 const WS_RESTART_DELAY = 3600000; // Once an hour
-const SAVE_PATH = process.cwd() + '/policies.csv';
 
 async function main() {
-    const { debug, discordKey, auth } = await readConfigs();
+    const { debug, channelName, discordKey, auth, saveDir } = await readConfigs();
     const prov = await getNftyHttpsProv();
     const signerManager = new SignerManager(prov);
-    const policyManager = new PolicyManager(SAVE_PATH);
+    const policyManager = new PolicyManager(saveDir + (saveDir.endsWith('/') ? '' : '/') + 'policies.csv');
+    const cancelManager = new CancelManager(signerManager);
     const looksRequests = new LooksRequests(true);
-    const looksEnsurer = new FarmingController(signerManager, policyManager, looksRequests, debug);
+    const farmingController = new FarmingController(prov, signerManager, policyManager, cancelManager, looksRequests, debug);
 
     await Promise.all([
         signerManager.load(),
         policyManager.load(),
         looksRequests.load(),
+        farmingController.syncBaseFee(),
     ]);
     
-    const discordCont = new DiscordController(discordKey, auth, looksEnsurer);
+    const discordCont = new DiscordController(channelName, discordKey, auth, farmingController, signerManager, policyManager);
     await discordCont.start();
 
     console.log('Starting farming controller in ' + (debug === false ? 'PROD' : 'DEBUG') + ' mode');
-    await run(looksEnsurer);
+    await run(farmingController);
 }
 
-async function run(looksEnsurer) {
+async function run(farmingController) {
     console.log('(re)starting websocket connections!');
 
     const frontrunSaleTx = async tx => {
         try {
-            await looksEnsurer.frontrunSaleTx(tx);
+            await farmingController.frontrunSaleTx(tx);
         }
         catch (err) {
             console.log('Failed to handle tx ' + tx.hash + ': ' + err.message);
@@ -45,9 +47,12 @@ async function run(looksEnsurer) {
         }
     };
 
-    const [closeLooks, closeGems] = await Promise.all([
+    const updateBaseFee = async baseFee => await farmingController.syncBaseFee(baseFee);
+
+    const [closeLooks, closeGems, closeBlocks] = await Promise.all([
         streamPendingTxs(LOOKS_ADDRESS, frontrunSaleTx),
-        streamPendingTxs(GEM_ADDRESS, frontrunSaleTx)
+        streamPendingTxs(GEM_ADDRESS, frontrunSaleTx),
+        streamBlocks(updateBaseFee)
     ]);
 
     // Restart after an hour to prevent socket from timing out
@@ -55,8 +60,9 @@ async function run(looksEnsurer) {
         await Promise.all([
             closeLooks(),
             closeGems(),
+            closeBlocks(),
         ]);
-        await run(looksEnsurer);
+        await run(farmingController);
     }, WS_RESTART_DELAY);
 }
 

@@ -30,12 +30,12 @@ class CancelManager {
         }
 
         const updateReq = () => {
-            this._requests.set(listing.token.id, { user: user.toLowerCase(), listing, maxFee, prioFee });
-            console.log('Update cancel request ' + listing.token.id);
+            this._requests.set(listing.token.uniqueId, { user: user.toLowerCase(), listing, maxFee, prioFee });
+            console.log('Update cancel request ' + listing.token.uniqueId);
         }
 
         // Add or replace existing request if new prio fee is greater
-        const existing = this._requests.get(listing.token.id);
+        const existing = this._requests.get(listing.token.uniqueId);
         if (existing) {
             const newPrio = calcPrioFee(baseFee, maxFee, prioFee);
             const existingPrio = calcPrioFee(baseFee, existing.maxFee, existing.prioFee);
@@ -50,9 +50,9 @@ class CancelManager {
 
     // Removes request from batch
     remove(token) {
-        if (this._requests.has(token.id)) {
-            this._requests.remove(token.id);
-            console.log('Removed cancel request ' + token.id);
+        if (this._requests.has(token.uniqueId)) {
+            this._requests.remove(token.uniqueId);
+            console.log('Removed cancel request ' + token.uniqueId);
         }
     }
 

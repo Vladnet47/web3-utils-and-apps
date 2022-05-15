@@ -64,9 +64,11 @@ async function streamBlocks(callback, chainId) {
         throw new Error('Missing callback');
     }
 
+    let blockNumber = 0;
     const prov = await common.getZmokHttpProv(chainId);
     prov.on('block', async bn => {
-        if (bn) {
+        if (bn && bn > blockNumber) {
+            blockNumber = bn;
             try {
                 await callback(bn);
             }
@@ -92,9 +94,11 @@ async function streamFullBlocks(callback, chainId) {
         throw new Error('Missing callback');
     }
 
+    let blockNumber = 0;
     const prov = await common.getAlchemyHttpProv(chainId);
     prov.on('block', async bn => {
-        if (bn) {
+        if (bn && bn > blockNumber) {
+            blockNumber = bn;
             let block;
             try {
                 block = await prov.getBlockWithTransactions(bn);

@@ -1,9 +1,13 @@
 const ethers = require('ethers');
 const { Client, Intents } = require('discord.js');
 const { notify } = require('../../utils');
+const { Token } = require('./objects');
 
 class DiscordController {
-    constructor(discordKey, auth, looksEnsurer) {
+    constructor(channelName, discordKey, auth, farmingController, signerManager, policyManager) {
+        if (!channelName) {
+            throw new Error('Missing channel name');
+        }
         if (!discordKey) {
             throw new Error('Missing discord token');
         }
@@ -13,13 +17,22 @@ class DiscordController {
         if (!auth.admin) {
             throw new Error('Missing auth admin');
         }
-        if (!looksEnsurer) {
-            throw new Error('Missing looks ensurer');
+        if (!farmingController) {
+            throw new Error('Missing farming controller');
+        }
+        if (!signerManager) {
+            throw new Error('Missing signer manager');
+        }
+        if (!policyManager) {
+            throw new Error('Missing policy manager');
         }
 
+        this._channelName = channelName.toLowerCase();
         this._token = discordKey;
         this._client;
-        this._le = looksEnsurer;
+        this._fc = farmingController;
+        this._sm = signerManager;
+        this._pm = policyManager;
         this._authAdmin = auth.admin;
         this._auth = new Map();
         for (const [name, discordId] of Object.entries(auth)) {
@@ -38,12 +51,13 @@ class DiscordController {
         // Create discord client
         this._client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
         this._client.once('ready', async () => {
+            console.log('Started server, listening to ' + this._channelName);
             await notify('Ready to cuck!');
         });
         this._client.login(this._token);
 
         this._client.on('messageCreate', async cursor => {
-            if (cursor.author.bot || !cursor.channel.name.includes('looks')) {
+            if (cursor.author.bot || cursor.channel.name !== this._channelName) {
                 return;
             }
 
@@ -69,62 +83,51 @@ class DiscordController {
             try {
                 switch (command) {
                     case 'users': {
-                        const users = this._le.signers;
-                        let str = users[0];
+                        const users = this._sm.names;
+                        let message = users[0];
                         for (let i = 1; i < users.length; ++i) {
-                            str += ', ' + users[i];
+                            message += ', ' + users[i];
                         }
-                        if (str) {
-                            cursor.reply(str);
-                        }
-                        else {
-                            cursor.reply('No users found');
-                        }
+                        cursor.reply(message || 'No users found');
                         break;
                     };
                     case 'policies': {
                         const user = args[1] ? args[1].toLowerCase() : null;
                         let message;
                         if (user) {
-                            message = this._formatPolicies(this._le.policies.filter(p => p.owner === user.toLowerCase()));
+                            const address = this._sm.getAddress(user);
+                            message = this._formatPolicies(this._pm.policies.filter(p => p.user === address));
                         }
                         else {
-                            message = this._formatPolicies(this._le.policies);
+                            message = this._formatPolicies(this._pm.policies);
                         }
-                        if (message) {
-                            cursor.reply(message);
-                        }
-                        else {
-                            cursor.reply('No policies found');
-                        }
+                        cursor.reply(message || 'No policies found');
                         break;
                     }
                     case 'add': {
                         const user = args[1] ? args[1].toLowerCase() : null;
                         this._authenticate(user, discordId);
-                        const tokenContract = args[2] ? args[2].toLowerCase() : null;
-                        const tokenId = args[3] ? args[3].toLowerCase() : null;
-                        const maxInsurance = args[4] ? args[4].toLowerCase() : null;
-                        await this._le.addPolicy(user, tokenContract, tokenId, maxInsurance);
-                        const message = this._formatPolicies(this._le.policies.filter(p => p.owner === user.toLowerCase()));
-                        if (message) {
-                            cursor.reply(message);
+                        const token = new Token(args[2], args[3]);
+                        const insurance = args[4] ? args[4].toLowerCase() : null;
+                        if (!insurance) {
+                            throw new Error('Missing insurance (eth)');
                         }
+                        await this._pm.add(this._sm.getAddress(user), token, ethers.utils.parseEther(insurance));
+                        await this._pm.save();
+                        const address = this._sm.getAddress(user);
+                        const message = this._formatPolicies(this._pm.policies.filter(p => p.user === address));
+                        cursor.reply('Successfully added policy' + (message ? '\n' + message : ''));
                         break;
                     }
                     case 'remove': {
                         const user = args[1] ? args[1].toLowerCase() : null;
                         this._authenticate(user, discordId);
-                        const tokenContract = args[2] ? args[2].toLowerCase() : null;
-                        const tokenId = args[3] ? args[3].toLowerCase() : null;
-                        await this._le.removePolicy(user, tokenContract, tokenId);
-                        const message = this._formatPolicies(this._le.policies.filter(p => p.owner === user.toLowerCase()));
-                        if (message) {
-                            cursor.reply('Successfully removed policy\n' + message);
-                        }
-                        else {
-                            cursor.reply('Successfully removed policy');
-                        }
+                        const token = new Token(args[2], args[3]);
+                        await this._pm.remove(token);
+                        await this._pm.save();
+                        const address = this._sm.getAddress(user);
+                        const message = this._formatPolicies(this._pm.policies.filter(p => p.user === address));
+                        cursor.reply('Successfully removed policy' + (message ? '\n' + message : ''));
                         break;
                     }
                     case 'help': 
@@ -134,8 +137,8 @@ class DiscordController {
                 }
             }
             catch (err) {
-                cursor.reply('Encountered error: ' + err.message + '\n' + this._printUsage());
-                console.log('Encountered error: ' + err.message);
+                cursor.reply('Error: ' + err.message + '\n' + this._printUsage());
+                console.log('Error: ' + err.message);
                 console.log(err.stack);
             } 
         });
@@ -161,7 +164,8 @@ class DiscordController {
         }
         if (policies.length > 0) {
             const formatPolicy = p => {
-                return p.owner + ' ' + p.tokenContract + ' ' + p.tokenId + ' ' + '[insured for ' + ethers.utils.formatEther(p.maxInsurance) + 'Ξ] [' + (p.running ? 'RUNNING' : 'STOPPED') + ']';
+                const name = this._sm.getName(p.user);
+                return name + ' ' + p.token.address + ' ' + p.token.id + ' ' + '[insured for ' + ethers.utils.formatEther(p.insurance) + 'Ξ] [' + (p.running ? 'ACTIVE' : 'INACTIVE') + ']';
             }
             let str = formatPolicy(policies[0]);
             for (let i = 1; i < policies.length; ++i) {

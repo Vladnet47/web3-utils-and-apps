@@ -42,6 +42,23 @@ class SignerManager {
         }
     }
 
+    getName(address) {
+        if (!address || !ethers.utils.isAddress(address)) {
+            throw new Error('Missing address');
+        }
+        address = address.toLowerCase();
+        let name;
+        for (const [name, addr] of this._addresses.entries()) {
+            if (addr === address) {
+                return name;
+            }
+        }
+        if (!name) {
+            throw new Error('User does not exist');
+        }
+        return name;
+    }
+
     getAddress(name) {
         if (!name) {
             throw new Error('Missing name');
