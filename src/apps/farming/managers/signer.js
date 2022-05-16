@@ -1,5 +1,5 @@
 const ethers = require('ethers');
-const { readConfigs, getAddressDetails } = require('../../utils');
+const { readConfigs, getAddressDetails } = require('../../../utils');
 
 class SignerManager {
     constructor(provider) {

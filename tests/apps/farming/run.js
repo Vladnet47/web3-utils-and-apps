@@ -1,11 +1,10 @@
 const ethers = require('ethers');
 const FarmingController = require('../../../src/apps/farming/controller');
-const SignerManager = require('../../../src/apps/farming/signer-manager');
-const PolicyManager = require('../../../src/apps/farming/policy-manager');
-const CancelManager = require('../../../src/apps/farming/cancel-manager');
+const { SignerManager, CancelPolicyManager } = require('../../../src/apps/farming/managers');
 const { getNftyHttpsProv, LooksRequests } = require('../../../src/utils');
 const { Token, Listing } = require('../../../src/apps/farming/objects');
 const { createLooksrareBuyTx, createGemBuyTx } = require('./utils');
+const { CancelPolicy } = require('../../../src/apps/farming/objects');
 
 //0xae10552105783ae94523d87b4a1c947c13e254b7903892237fed2a282ab4071b -> batchBuyWithETH
 //0x2e4e2d8991cb62e88d0bae051e39bd65763d9f7e95005615bf0deec23eeb0510 -> batchBuyWithERC20s
@@ -19,29 +18,28 @@ const SAVE_PATH = process.cwd() + '/tests/apps/policies.csv';
 async function main() {
     const prov = await getNftyHttpsProv();
     const signerManager = new SignerManager(prov);
-    const policyManager = new PolicyManager(SAVE_PATH);
-    const cancelManager = new CancelManager(signerManager);
+    const cancelManager = new CancelPolicyManager(signerManager, SAVE_PATH);
     const looksRequests = new LooksRequests(false);    
+    const farmingCont = new FarmingController(prov, signerManager, cancelManager, looksRequests, true);
+
     await Promise.all([
         signerManager.load(),
-        policyManager.load(),
+        cancelManager.load(),
         looksRequests.load(),
+        farmingCont.syncBaseFee()
     ]);
-
-    const farmingCont = new FarmingController(prov, signerManager, policyManager, cancelManager, looksRequests, true);
-    await farmingCont.syncBaseFee();
 
     const tests = [
         //testNotTokenMatch,
         //testBalTooLow,
         //testInsTooLow,
-        testMatchAskWithTakerBidUsingETHAndWETH,
+        //testMatchAskWithTakerBidUsingETHAndWETH,
         //testBatchBuyWithETHGroupInsTooLow,
-        //testBatchBuyWithETH
+        testBatchBuyWithETH
     ];
 
     for (const test of tests) {
-        await test(prov, farmingCont, signerManager, policyManager);
+        await test(prov, farmingCont, signerManager, cancelManager);
     }
 }
 
@@ -51,7 +49,7 @@ async function testBalTooLow(prov, farmingCont, sm, pm) {
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.add(sm.getAddress('test'), token, ethers.utils.parseEther('0.1'));
+    pm.addPolicy(new CancelPolicy(sm.getAddress('test'), token, ethers.utils.parseEther('0.1')));
     const tx = createLooksrareBuyTx(new Listing(token, 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -62,7 +60,7 @@ async function testInsTooLow(prov, farmingCont, sm, pm) {
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.add(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001'));
+    pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001')));
     const tx = createLooksrareBuyTx(new Listing(token, 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -73,7 +71,7 @@ async function testNotTokenMatch(prov, farmingCont, sm, pm) {
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.add(sm.getAddress('test'), token, ethers.utils.parseEther('0.1'));
+    pm.addPolicy(new CancelPolicy(sm.getAddress('test'), token, ethers.utils.parseEther('0.1')));
     const tx = createLooksrareBuyTx(new Listing(new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45110), 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -84,7 +82,7 @@ async function testMatchAskWithTakerBidUsingETHAndWETH(prov, farmingCont, sm, pm
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.add(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.1'));
+    pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.1')));
     const tx = createLooksrareBuyTx(new Listing(token, 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -106,7 +104,7 @@ async function testBatchBuyWithETHGroupInsTooLow(prov, farmingCont, sm, pm) {
     ];
     pm.clear();
     for (const token of tokens) {
-        pm.add(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001'));
+        pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001')));
     }
     const tx = createGemBuyTx(tokens.map((token, i) => new Listing(token, i)), 400, 1);
     await farmingCont.frontrunSaleTx(tx);
@@ -129,7 +127,7 @@ async function testBatchBuyWithETH(prov, farmingCont, sm, pm) {
     ];
     pm.clear();
     for (const token of tokens) {
-        pm.add(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.001'));
+        pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.002')));
     }
     const tx = createGemBuyTx(tokens.map((token, i) => new Listing(token, i)), 400, 1);
     await farmingCont.frontrunSaleTx(tx);

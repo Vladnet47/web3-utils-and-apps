@@ -1,17 +1,24 @@
 const { ethers } = require('ethers');
-const { getFrontrunFee, calcPrioFee, estimateGas } = require('../../utils');
+const { getFrontrunFee, calcPrioFee, estimateGas } = require('../../../utils');
 
-
+const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a'.toLowerCase();
+const LOOKS_IFACE = new ethers.utils.Interface(['function cancelMultipleMakerOrders(uint256[] orderNonces) payable returns()']);
+const BASE_GAS_LIMIT = 70000;
+const PER_GAS_LIMIT = 25000;
 
 // Manages running tasks for policies. Responsible for creating optimal transactions
 // for cancelling token listings that someone is actively trying to purchase
-class CancelManager {
-    constructor(signerManager) {
+class ListingManager {
+    constructor(signerManager, looksRequests) {
         if (!signerManager) {
             throw new Error('Missing signer manager');
         }
+        if (!looksRequests) {
+            throw new Error('Missing looks requests');
+        }
         this._sm = signerManager;
-        this._requests = new Map();
+        this._req = looksRequests;
+        this._policies = new Map();
     }
 
     // Adds request for frontrunning a purchase tx for token with policy

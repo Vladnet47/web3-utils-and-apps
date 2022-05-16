@@ -12,7 +12,7 @@ const IFACE = new ethers.utils.Interface([
 ]);
 
 class FarmingController {
-    constructor(provider, signerManager, policyManager, cancelManager, requests, debug) {
+    constructor(provider, signerManager, cancelManager, looksRequests, debug) {
         if (!provider) {
             throw new Error('Missing provider');
         }
@@ -22,18 +22,14 @@ class FarmingController {
         if (!cancelManager) {
             throw new Error('Missing task manager');
         }
-        if (!policyManager) {
-            throw new Error('Missing policy manager');
-        }
-        if (!requests) {
+        if (!looksRequests) {
             throw new Error('Missing looksrare requests module');
         }
         this._debug = debug !== false;
         this._prov = provider;
         this._sm = signerManager;
-        this._pm = policyManager;
         this._cm = cancelManager;
-        this._req = requests;
+        this._req = looksRequests;
         this._baseFee = null;
     }
 
@@ -70,9 +66,8 @@ class FarmingController {
 
         // Check if transaction matches known policies and add to task manager
         for (const order of orders) {
-            if (this._pm.hasActive(order.token)) {
-                const policy = this._pm.get(order.token);
-                this._cm.add(policy.user, order, baseFee, maxFee, prioFee);
+            if (this._cm.hasActivePolicy(order.token)) {
+                this._cm.addRequest(order, baseFee, maxFee, prioFee);
             }
             else {
                 console.log(hash + ' ' + order.token.id + ' (' + order.nonce + ') did not match any active policies');
@@ -80,14 +75,14 @@ class FarmingController {
         }
 
         // Get updated cancel transactions to send
-        const bundle = this._cm.getTxs(baseFee);
+        const bundle = this._cm.getRequestTxs(baseFee);
         const notifs = [];
 
         // Make sure cancel transaction don't exceed insurance policies
         const cancelBundle = [];
         for (const { user, listings, transaction } of bundle) {
             const tokens = listings.map(l => l.token);
-            const insurance = this._pm.getInsurance(tokens);
+            const insurance = this._cm.getInsurance(tokens);
             const balance = this._sm.getBalance(user);
             const cost = getTxCost(transaction);
             if (cost.gt(insurance)) {
@@ -111,6 +106,7 @@ class FarmingController {
 
         // Send transactions and record successes/fails
         const sm = this._sm;
+        const cm = this._cm;
         await Promise.all(cancelBundle.map(({ user, transaction, tokens }) => (async () => {
             const signer = sm.getSigner(user);
             let success;
@@ -137,7 +133,7 @@ class FarmingController {
             }
 
             for (const token of tokens) {
-                this._pm.stop(token);
+                cm.stopPolicy(token);
             }
         })()));
 
