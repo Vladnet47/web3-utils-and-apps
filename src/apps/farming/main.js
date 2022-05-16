@@ -1,9 +1,7 @@
 const { readConfigs, streamPendingTxs, printTx, LooksRequests, getNftyHttpsProv, streamBlocks } = require('../../utils');
-const CancelManager = require('./cancel-manager');
 const FarmingController = require('./controller');
 const DiscordController = require('./discord');
-const PolicyManager = require('./policy-manager');
-const SignerManager = require('./signer-manager');
+const { SignerManager, CancelPolicyManager, } = require('./managers');
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a';
 const GEM_ADDRESS = '0x83C8F28c26bF6aaca652Df1DbBE0e1b56F8baBa2';
@@ -14,19 +12,18 @@ async function main() {
     const { debug, channelName, discordKey, auth, saveDir } = await readConfigs();
     const prov = await getNftyHttpsProv();
     const signerManager = new SignerManager(prov);
-    const policyManager = new PolicyManager(saveDir + (saveDir.endsWith('/') ? '' : '/') + 'policies.csv');
-    const cancelManager = new CancelManager(signerManager);
+    const cancelManager = new CancelPolicyManager(signerManager, saveDir + (saveDir.endsWith('/') ? '' : '/') + 'cancel-policies.csv');
     const looksRequests = new LooksRequests(true);
-    const farmingController = new FarmingController(prov, signerManager, policyManager, cancelManager, looksRequests, debug);
+    const farmingController = new FarmingController(prov, signerManager, cancelManager, looksRequests, debug);
 
     await Promise.all([
         signerManager.load(),
-        policyManager.load(),
+        cancelManager.load(),
         looksRequests.load(),
         farmingController.syncBaseFee(),
     ]);
     
-    const discordCont = new DiscordController(channelName, discordKey, auth, farmingController, signerManager, policyManager);
+    const discordCont = new DiscordController(channelName, discordKey, auth, farmingController, signerManager, cancelManager);
     await discordCont.start();
 
     console.log('Starting farming controller in ' + (debug === false ? 'PROD' : 'DEBUG') + ' mode');

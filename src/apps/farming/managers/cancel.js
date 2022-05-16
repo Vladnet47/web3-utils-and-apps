@@ -1,6 +1,6 @@
 const ethers = require('ethers');
 const PolicyManager = require('./policy');
-const { Token } = require('../objects');
+const { Token, CancelPolicy } = require('../objects');
 const { existsFile, readCsv, writeCsv, calcPrioFee, getFrontrunFee } = require('../../../utils');
 
 const LOOKS_ADDRESS = '0x59728544b08ab483533076417fbbb2fd0b17ce3a'.toLowerCase();
@@ -21,7 +21,7 @@ class CancelPolicyManager extends PolicyManager {
                 if (!policy.insurance) {
                     throw new Error('Policy missing insurance');
                 }
-                this.addPolicy(policy.user, new Token(policy.contract, policy.tokenId), ethers.utils.parseEther(policy.insurance));
+                this.addPolicy(new CancelPolicy(policy.user, new Token(policy.contract, policy.tokenId), ethers.utils.parseEther(policy.insurance)));
             }
         }
         console.log('Loaded ' + this._policies.size + ' cancel policies from storage');

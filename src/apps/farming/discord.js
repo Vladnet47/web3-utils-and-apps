@@ -1,10 +1,10 @@
 const ethers = require('ethers');
 const { Client, Intents } = require('discord.js');
 const { notify } = require('../../utils');
-const { Token } = require('./objects');
+const { Token, CancelPolicy } = require('./objects');
 
 class DiscordController {
-    constructor(channelName, discordKey, auth, farmingController, signerManager, policyManager) {
+    constructor(channelName, discordKey, auth, farmingController, signerManager, cancelManager) {
         if (!channelName) {
             throw new Error('Missing channel name');
         }
@@ -23,8 +23,8 @@ class DiscordController {
         if (!signerManager) {
             throw new Error('Missing signer manager');
         }
-        if (!policyManager) {
-            throw new Error('Missing policy manager');
+        if (!cancelManager) {
+            throw new Error('Missing cancel policy manager');
         }
 
         this._channelName = channelName.toLowerCase();
@@ -32,7 +32,7 @@ class DiscordController {
         this._client;
         this._fc = farmingController;
         this._sm = signerManager;
-        this._pm = policyManager;
+        this._cm = cancelManager;
         this._authAdmin = auth.admin;
         this._auth = new Map();
         for (const [name, discordId] of Object.entries(auth)) {
@@ -96,10 +96,10 @@ class DiscordController {
                         let message;
                         if (user) {
                             const address = this._sm.getAddress(user);
-                            message = this._formatPolicies(this._pm.policies.filter(p => p.user === address));
+                            message = this._formatPolicies(this._cm.policies.filter(p => p.user === address));
                         }
                         else {
-                            message = this._formatPolicies(this._pm.policies);
+                            message = this._formatPolicies(this._cm.policies);
                         }
                         cursor.reply(message || 'No policies found');
                         break;
@@ -112,10 +112,10 @@ class DiscordController {
                         if (!insurance) {
                             throw new Error('Missing insurance (eth)');
                         }
-                        await this._pm.add(this._sm.getAddress(user), token, ethers.utils.parseEther(insurance));
-                        await this._pm.save();
+                        await this._cm.addPolicy(new CancelPolicy(this._sm.getAddress(user), token, ethers.utils.parseEther(insurance)));
+                        await this._cm.save();
                         const address = this._sm.getAddress(user);
-                        const message = this._formatPolicies(this._pm.policies.filter(p => p.user === address));
+                        const message = this._formatPolicies(this._cm.policies.filter(p => p.user === address));
                         cursor.reply('Successfully added policy' + (message ? '\n' + message : ''));
                         break;
                     }
@@ -123,10 +123,10 @@ class DiscordController {
                         const user = args[1] ? args[1].toLowerCase() : null;
                         this._authenticate(user, discordId);
                         const token = new Token(args[2], args[3]);
-                        await this._pm.remove(token);
-                        await this._pm.save();
+                        await this._cm.removePolicy(token);
+                        await this._cm.save();
                         const address = this._sm.getAddress(user);
-                        const message = this._formatPolicies(this._pm.policies.filter(p => p.user === address));
+                        const message = this._formatPolicies(this._cm.policies.filter(p => p.user === address));
                         cursor.reply('Successfully removed policy' + (message ? '\n' + message : ''));
                         break;
                     }
@@ -165,7 +165,7 @@ class DiscordController {
         if (policies.length > 0) {
             const formatPolicy = p => {
                 const name = this._sm.getName(p.user);
-                return name + ' ' + p.token.address + ' ' + p.token.id + ' ' + '[insured for ' + ethers.utils.formatEther(p.insurance) + 'Ξ] [' + (p.running ? 'ACTIVE' : 'INACTIVE') + ']';
+                return name + ' ' + p.token.address + ' ' + p.token.id + ' ' + '[insured for ' + ethers.utils.formatEther(p.insurance) + 'Ξ] [' + (p.active ? 'ACTIVE' : 'INACTIVE') + ']';
             }
             let str = formatPolicy(policies[0]);
             for (let i = 1; i < policies.length; ++i) {
