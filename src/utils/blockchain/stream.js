@@ -120,7 +120,7 @@ async function streamBlocks(callback, chainId) {
 
     console.log('Started monitoring block numbers');
     return async () => {
-        await prov.destroy();
+        //await prov.destroy();
         console.log('Closed block number stream');
     };
 }
