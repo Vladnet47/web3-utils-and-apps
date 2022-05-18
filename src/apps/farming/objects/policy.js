@@ -13,6 +13,10 @@ class Policy {
         this._active = true;
     }
 
+    get type() {
+        return 'listing';
+    }
+
     get active() {
         return this._active;
     }
@@ -38,44 +42,4 @@ class Policy {
     }
 }
 
-class CancelPolicy extends Policy {
-    constructor(user, token, insurance) {
-        super(user, token);
-        if (!insurance || !insurance._isBigNumber) {
-            throw new Error('Missing or invalid insurance');
-        }
-        this._insurance = insurance;
-    }
-
-    get type() {
-        return 'cancel';
-    }
-
-    get insurance() {
-        return this._insurance;
-    }
-}
-
-class ListingPolicy extends Policy {
-    constructor(user, token, frequency) {
-        super(user, token);
-        if (!frequency || frequency < 1) {
-            throw new Error('Missing or invalid listing frequency');
-        }
-        this._frequency = frequency;
-    }
-
-    get type() {
-        return 'listing';
-    }
-
-    get frequency() {
-        return this._frequency;
-    }
-}
-
-module.exports = {
-    Policy,
-    CancelPolicy,
-    ListingPolicy,
-};
+module.exports = Policy;

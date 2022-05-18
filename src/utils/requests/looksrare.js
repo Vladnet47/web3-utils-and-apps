@@ -93,13 +93,13 @@ class LooksRequests extends HttpRequests {
         if (nonce == null || nonce < 0) {
             throw new Error('Missing or invalid listing nonce');
         }
-        if (duration < 1) {
+        if (duration / 1000 < 1000) {
             throw new Error('Missing or invalid duration');
         }
 
         // Generate signature over query parameters
         const startTime = Math.round(new Date().getTime() / 1000);
-        const endTime = Math.round((startTime + Math.round(duration * 60)) / 100) * 100;
+        const endTime = Math.round((startTime + Math.round(duration / 1000)) / 100) * 100;
         const variables = {
             isOrderAsk: true,
             signer: signer.address,
@@ -156,6 +156,33 @@ class LooksRequests extends HttpRequests {
         }
 
         return parseInt(res.data.user.nonce);
+    }
+
+    async getCollection(address) {
+        if (!address || !ethers.utils.isAddress(address)) {
+            throw new Error('Missing or invalid user');
+        }
+
+        const body = {
+            query: '\n    query GetTokens(\n      $filter: TokenFilterInput\n      $pagination: PaginationInput\n      $sort: TokenSortInput\n      $ownerFilter: TokenOwnerInput\n      $bidsFilter: OrderFilterInput\n    ) {\n      tokens(filter: $filter, pagination: $pagination, sort: $sort) {\n        ...TokensFragment\n        owners(filter: $ownerFilter) {\n          owner {\n            ...BaseOwnerFragment\n          }\n          balance\n        }\n        bids(filter: $bidsFilter, sort: PRICE_DESC, pagination: { first: 1 }) {\n          ...OrderFragment\n        }\n      }\n    }\n    \n  fragment BaseOwnerFragment on User {\n    address\n    name\n  }\n\n    \n  fragment TokensFragment on Token {\n    id\n    tokenId\n    image {\n      src\n      contentType\n    }\n    name\n    lastOrder {\n      price\n      currency\n    }\n    collection {\n      name\n      address\n      type\n      isVerified\n      points\n      totalSupply\n      floorOrder {\n        price\n      }\n      volume {\n        volume24h\n      }\n      floor {\n        floorPriceOS\n        floorPrice\n        floorChange24h\n        floorChange7d\n        floorChange30d\n      }\n    }\n  }\n\n    \n  fragment OrderFragment on Order {\n    isOrderAsk\n    signer\n    collection {\n      address\n    }\n    price\n    amount\n    strategy\n    currency\n    nonce\n    startTime\n    endTime\n    minPercentageToAsk\n    params\n    signature\n    token {\n      tokenId\n    }\n    hash\n  }\n\n',
+            variables: {
+                filter: { collection: address },
+                //ownerFilter: { addresses: ["0x743Fc8Ba2a5e435B376bD2a7Ee5c95B470C85C2d"] },
+                pagination: { first: 1 },
+                sort: 'PRICE_ASC'
+            }
+        };
+
+        const res = await this.post(URL, body, HEADERS, 'json');
+        if (!res || !res.data || !res.data.tokens || !res.data.tokens[0]) {
+            throw new Error('Response data invalid format');
+        }
+
+        const token = res.data.tokens[0];
+        return {
+            floorPrice: ethers.utils.parseEther(token.collection.floorOrder.price),
+            floorPriceOS: ethers.utils.parseEther(token.collection.floor.floorPriceOS),
+        };
     }
 
     async isTokenOwner(user, token) {

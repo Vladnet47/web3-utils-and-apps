@@ -130,6 +130,10 @@ class DiscordController {
                         cursor.reply('Successfully removed policy' + (message ? '\n' + message : ''));
                         break;
                     }
+                    case 'estop': {
+                        console.log(this._auth.get(discordId) + ' executed emergency stop!');
+                        process.exit(1);
+                    }
                     case 'help': 
                     default: {
                         cursor.reply(this._printUsage());
@@ -155,7 +159,8 @@ class DiscordController {
         '  users\n' +
         '  policies <user>\n' +
         '  add <user> <tokenContract> <tokenId> <insurance (eth)>\n' +
-        '  remove <user> <tokenContract> <tokenId>';
+        '  remove <user> <tokenContract> <tokenId>\n' +
+        '  estop';
     }
 
     _formatPolicies(policies) {

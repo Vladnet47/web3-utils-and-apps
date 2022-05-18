@@ -51,7 +51,7 @@ class CancelPolicyManager extends PolicyManager {
         return insurance;
     }
 
-    // Adds request for frontrunning a sale with cancel transaction
+    // Adds request for frontrunning a sale with cancel transaction, and returns true if request accepted
     addRequest(listing, baseFee, maxFee, prioFee) {
         if (!listing || !this.hasActivePolicy(listing.token)) {
             throw new Error('No active policy exists for token');
@@ -72,17 +72,21 @@ class CancelPolicyManager extends PolicyManager {
             const existingPrio = calcPrioFee(baseFee, existing.maxFee, existing.prioFee);
             if (newPrio.gt(existingPrio)) {
                 updateReq();
+                return true;
             }
         }
         else {
             updateReq();
+            return true;
         }
+
+        return false;
     }
 
     // Removes request from batch
     removeRequest(token) {
         if (this._requests.has(token.uniqueId)) {
-            this._requests.remove(token.uniqueId);
+            this._requests.delete(token.uniqueId);
             console.log('Removed cancel request ' + token.uniqueId);
         }
     }

@@ -1,6 +1,8 @@
 
 module.exports = {
     Token: require('./token'),
-    Listing: require('./listing'),
-    ...require('./policy'),
+    Purchase: require('./purchase'),
+    ListingPolicy: require('./listing'),
+    CancelPolicy: require('./cancel'),
+    Policy: require('./policy')
 };

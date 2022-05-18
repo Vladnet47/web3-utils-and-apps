@@ -1,6 +1,6 @@
 const { ethers } = require('ethers');
 const { getTxCost, printTx, send, simulate, notify, decodeTx, getBaseFee } = require('../../utils');
-const { Listing, Token } = require('./objects');
+const { Purchase, Token } = require('./objects');
 
 const IFACE = new ethers.utils.Interface([
     'function matchAskWithTakerBidUsingETHAndWETH((bool,address,uint256,uint256,uint256,bytes),(bool,address,address,uint256,uint256,uint256,address,address,uint256,uint256,uint256,uint256,bytes,uint8,bytes32,bytes32)) payable returns()',
@@ -64,14 +64,20 @@ class FarmingController {
         const notifyTx = this._notifyTx;
         const debug = this._debug;
 
+        console.log(hash + ' checking tx');
+
         // Check if transaction matches known policies and add to task manager
+        let addedAtLeastOne = false;
         for (const order of orders) {
             if (this._cm.hasActivePolicy(order.token)) {
-                this._cm.addRequest(order, baseFee, maxFee, prioFee);
+                addedAtLeastOne = this._cm.addRequest(order, baseFee, maxFee, prioFee);
             }
             else {
                 console.log(hash + ' ' + order.token.id + ' (' + order.nonce + ') did not match any active policies');
             }
+        }
+        if (!addedAtLeastOne) {
+            return;
         }
 
         // Get updated cancel transactions to send
@@ -134,6 +140,7 @@ class FarmingController {
 
             for (const token of tokens) {
                 cm.stopPolicy(token);
+                cm.removeRequest(token);
             }
         })()));
 
@@ -148,7 +155,7 @@ class FarmingController {
                 case 'matchAskWithTakerBid': {
                     const takerBid = args[0];
                     const makerAsk = args[1];
-                    return [new Listing(
+                    return [new Purchase(
                         new Token(
                             makerAsk[2], 
                             takerBid[3].toString()
@@ -179,7 +186,7 @@ class FarmingController {
 
                         // Parse individual sales
                         for (let i = 3; i < tdParams.length; i += 13) {
-                            orders.push(new Listing(
+                            orders.push(new Purchase(
                                 new Token(
                                     '0x' + tdParams[i + 12].substring(24), 
                                     ethers.BigNumber.from('0x' + tdParams[i + 2]).toString()

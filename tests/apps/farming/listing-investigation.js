@@ -46,8 +46,8 @@ async function main() {
     // console.log('Response:');
     // console.log(JSON.stringify(res, null, 2));
 
-    const nonce = await looksRequests.getNonce(signer.address);
-    console.log('Nonce: ' + nonce);
+    const collection = await looksRequests.getCollection('0xfb7d186E24E128be1F1339fB9C2bA6fDBd87C6f9');
+    console.log('Nonce: ' + JSON.stringify(collection, null, 2));
 }
 
 main().catch(console.log);
