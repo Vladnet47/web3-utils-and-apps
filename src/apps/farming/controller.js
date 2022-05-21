@@ -12,7 +12,7 @@ const IFACE = new ethers.utils.Interface([
 ]);
 
 class FarmingController {
-    constructor(provider, signerManager, cancelManager, looksRequests, debug) {
+    constructor(provider, signerManager, cancelManager, listingManager, looksRequests, debug) {
         if (!provider) {
             throw new Error('Missing provider');
         }
@@ -22,6 +22,9 @@ class FarmingController {
         if (!cancelManager) {
             throw new Error('Missing task manager');
         }
+        if (!listingManager) {
+            throw new Error('Missing listing manager');
+        }
         if (!looksRequests) {
             throw new Error('Missing looksrare requests module');
         }
@@ -29,6 +32,7 @@ class FarmingController {
         this._prov = provider;
         this._sm = signerManager;
         this._cm = cancelManager;
+        this._lm = listingManager;
         this._req = looksRequests;
         this._baseFee = null;
     }
@@ -55,16 +59,19 @@ class FarmingController {
             await this.syncBaseFee();
         }
 
+        const orders = this.parseTx(saleTx);
+        if (orders.length === 0) {
+            console.log(hash + ' is not a sale, skipping');
+            return;
+        }
+
         // Parse transaction
         const hash = saleTx.hash;
         const maxFee = saleTx.maxFeePerGas || saleTx.gasPrice;
         const prioFee = saleTx.maxPriorityFeePerGas;
         const baseFee = this._baseFee;
-        const orders = this.parseTx(saleTx);
         const notifyTx = this._notifyTx;
         const debug = this._debug;
-
-        console.log(hash + ' checking tx');
 
         // Check if transaction matches known policies and add to task manager
         let addedAtLeastOne = false;

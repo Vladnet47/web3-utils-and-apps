@@ -49,7 +49,7 @@ async function testBalTooLow(prov, farmingCont, sm, pm) {
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.addPolicy(new CancelPolicy(sm.getAddress('test'), token, ethers.utils.parseEther('0.1')));
+    await pm.addPolicy(new CancelPolicy(sm.getAddress('test'), token, ethers.utils.parseEther('0.1')));
     const tx = createLooksrareBuyTx(new Purchase(token, 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -60,7 +60,7 @@ async function testInsTooLow(prov, farmingCont, sm, pm) {
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001')));
+    await pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001')));
     const tx = createLooksrareBuyTx(new Purchase(token, 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -71,7 +71,7 @@ async function testNotTokenMatch(prov, farmingCont, sm, pm) {
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.addPolicy(new CancelPolicy(sm.getAddress('test'), token, ethers.utils.parseEther('0.1')));
+    await pm.addPolicy(new CancelPolicy(sm.getAddress('test'), token, ethers.utils.parseEther('0.1')));
     const tx = createLooksrareBuyTx(new Purchase(new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45110), 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -82,7 +82,7 @@ async function testMatchAskWithTakerBidUsingETHAndWETH(prov, farmingCont, sm, pm
     }
     const token = new Token('0x34d85c9CDeB23FA97cb08333b511ac86E1C4E258', 45108);
     pm.clear();
-    pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.1')));
+    await pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.1')));
     const tx = createLooksrareBuyTx(new Purchase(token, 17), 200, 1);
     await farmingCont.frontrunSaleTx(tx);
 }
@@ -104,7 +104,7 @@ async function testBatchBuyWithETHGroupInsTooLow(prov, farmingCont, sm, pm) {
     ];
     pm.clear();
     for (const token of tokens) {
-        pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001')));
+        await pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.00001')));
     }
     const tx = createGemBuyTx(tokens.map((token, i) => new Purchase(token, i)), 400, 1);
     await farmingCont.frontrunSaleTx(tx);
@@ -127,7 +127,7 @@ async function testBatchBuyWithETH(prov, farmingCont, sm, pm) {
     ];
     pm.clear();
     for (const token of tokens) {
-        pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.003')));
+        await pm.addPolicy(new CancelPolicy(sm.getAddress('vdog'), token, ethers.utils.parseEther('0.003')));
     }
     const tx = createGemBuyTx(tokens.map((token, i) => new Purchase(token, i)), 400, 1);
     await farmingCont.frontrunSaleTx(tx);

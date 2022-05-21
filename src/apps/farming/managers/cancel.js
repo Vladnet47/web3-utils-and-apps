@@ -21,7 +21,7 @@ class CancelPolicyManager extends PolicyManager {
                 if (!policy.insurance) {
                     throw new Error('Policy missing insurance');
                 }
-                this.addPolicy(new CancelPolicy(policy.user, new Token(policy.contract, policy.tokenId), ethers.utils.parseEther(policy.insurance)));
+                await this.addPolicy(new CancelPolicy(policy.user, new Token(policy.contract, policy.tokenId), ethers.utils.parseEther(policy.insurance)));
             }
         }
         console.log('Loaded ' + this._policies.size + ' cancel policies from storage');

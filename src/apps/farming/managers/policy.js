@@ -85,7 +85,7 @@ class PolicyManager {
         return policy;
     }
 
-    addPolicy(policy) {
+    async addPolicy(policy) {
         if (!policy || !policy.token) {
             throw new Error('Missing or invalid policy');
         }
@@ -104,6 +104,7 @@ class PolicyManager {
             throw new Error('Missing token');
         }
         if (this._policies.has(token.uniqueId)) {
+            const policy = this.getPolicy(token);
             this._policies.delete(token.uniqueId);
             console.log('Removed ' + policy.type + ' policy ' + token.uniqueId);
         }

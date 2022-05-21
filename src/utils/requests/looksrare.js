@@ -1,7 +1,7 @@
 const ethers = require('ethers');
 const HttpRequests = require('./http');
 
-const URL = 'https://api.looksrare.org/graphql';
+const URL = 'https://graphql.looksrare.org/graphql';
 const HEADERS = {
     'authority': 'api.looksrare.org',
     'method': 'POST',
@@ -52,31 +52,19 @@ const MAKER_ORDER_SIG_TYPES = {
 };
 
 class LooksRequests extends HttpRequests {
-    async getListing(token) {
-        if (!token) {
-            throw new Error('Missing token');
+    constructor(useProxy, apiKey) {
+        super(useProxy);
+        // if (!apiKey) {
+        //     throw new Error('Missing api key');
+        // }
+        this._key = apiKey;
+    }
+
+    async getCollectionV2(address) {
+        if (!address || !ethers.utils.isAddress(address)) {
+            throw new Error('Missing or invalid user');
         }
-
-        const body = {
-            query: "\n    query GetToken($collection: Address!, $tokenId: String!) {\n      token(collection: $collection, tokenId: $tokenId) {\n        id\n        tokenId\n        image {\n          src\n          contentType\n        }\n        name\n        countOwners\n        description\n        animation {\n          src\n          contentType\n          original\n        }\n        lastOrder {\n          price\n          currency\n        }\n        collection {\n          name\n          address\n          type\n          isVerified\n          points\n          totalSupply\n          description\n          owner {\n            ...CollectionOwnerFragment\n          }\n          floorOrder {\n            price\n          }\n          floor {\n            floorPriceOS\n            floorPrice\n            floorChange24h\n            floorChange7d\n            floorChange30d\n          }\n        }\n        ask {\n          ...OrderFragment\n        }\n        attributes {\n          ...AttributeFragment\n        }\n      }\n    }\n    \n  fragment AttributeFragment on Attribute {\n    traitType\n    value\n    displayType\n    count\n    floorOrder {\n      price\n    }\n  }\n\n    \n  fragment OrderFragment on Order {\n    isOrderAsk\n    signer\n    collection {\n      address\n    }\n    price\n    amount\n    strategy\n    currency\n    nonce\n    startTime\n    endTime\n    minPercentageToAsk\n    params\n    signature\n    token {\n      tokenId\n    }\n    hash\n  }\n\n    \n  fragment CollectionOwnerFragment on User {\n    address\n    name\n    isVerified\n    avatar {\n      id\n      tokenId\n      image {\n        src\n        contentType\n      }\n    }\n  }\n\n  ",
-            variables: {
-                collection: token.address.toString(),
-                tokenId: token.id.toString()
-            }
-        };
-
-        const res = await this.post(URL, body, HEADERS, 'json');
-        if (!res || !res.data || !res.data.token) {
-            throw new Error('Response data invalid format');   
-        }
-
-        return {
-            floorPrice: ethers.utils.parseEther(res.data.token.collection.floorOrder.price),
-            floorPriceOS: ethers.utils.parseEther(res.data.token.collection.floor.floorPriceOS),
-            isListed: res.data.token.ask != null,
-            price: res.data.token.ask ? ethers.utils.parseEther(res.data.token.ask.price) : null,
-            nonce: res.data.token.ask ? res.data.token.ask.nonce : null,
-        };
+        const res = await this.get('https://api.looksrare.org/api/v1/collections/stats?address=' + address, HEADERS, 'json');
     }
 
     // Duration in minutes
@@ -93,13 +81,13 @@ class LooksRequests extends HttpRequests {
         if (nonce == null || nonce < 0) {
             throw new Error('Missing or invalid listing nonce');
         }
-        if (duration / 1000 < 1000) {
+        if (duration < 0) {
             throw new Error('Missing or invalid duration');
         }
 
         // Generate signature over query parameters
         const startTime = Math.round(new Date().getTime() / 1000);
-        const endTime = Math.round((startTime + Math.round(duration / 1000)) / 100) * 100;
+        const endTime = startTime + Math.round(duration / 1000);
         const variables = {
             isOrderAsk: true,
             signer: signer.address,
@@ -126,6 +114,9 @@ class LooksRequests extends HttpRequests {
 
         const res = await this.post(URL, body, HEADERS, 'json');
         if (!res || !res.data || !res.data.createOrder) {
+            if (res.errors && res.errors.length > 0) {
+                throw new Error(res.errors[0].message);
+            }
             throw new Error('Response data invalid format');
         }
 
@@ -152,6 +143,9 @@ class LooksRequests extends HttpRequests {
 
         const res = await this.post(URL, body, HEADERS, 'json');
         if (!res || !res.data || !res.data.user) {
+            if (res.errors && res.errors.length > 0) {
+                throw new Error(res.errors[0].message);
+            }
             throw new Error('Response data invalid format');
         }
 
@@ -175,13 +169,16 @@ class LooksRequests extends HttpRequests {
 
         const res = await this.post(URL, body, HEADERS, 'json');
         if (!res || !res.data || !res.data.tokens || !res.data.tokens[0]) {
+            if (res.errors && res.errors.length > 0) {
+                throw new Error(res.errors[0].message);
+            }
             throw new Error('Response data invalid format');
         }
 
         const token = res.data.tokens[0];
         return {
-            floorPrice: ethers.utils.parseEther(token.collection.floorOrder.price),
-            floorPriceOS: ethers.utils.parseEther(token.collection.floor.floorPriceOS),
+            floorPrice: ethers.BigNumber.from(token.collection.floorOrder.price),
+            floorPriceOS: ethers.BigNumber.from(token.collection.floor.floorPriceOS),
         };
     }
 
@@ -203,7 +200,10 @@ class LooksRequests extends HttpRequests {
         user = user.toLowerCase();
         const res = await this.post(URL, body, HEADERS, 'json');
         if (!res || !res.data || !res.data.token || !res.data.token.owners) {
-            throw new Error('Response data invalid format'); 
+            if (res.errors && res.errors.length > 0) {
+                throw new Error(res.errors[0].message);
+            }
+            throw new Error('Response data invalid format');
         }
 
         const owners = res.data.token.owners;
