@@ -17,6 +17,8 @@ class ListingPolicyManager extends PolicyManager {
         this._req = looksRequests;
         this._floorPriceMutex = new Mutex();
         this._floorPrice = new Map();
+
+        this.syncFloorPrice = this.syncFloorPrice.bind(this);
     }
 
     async load() {
@@ -51,7 +53,7 @@ class ListingPolicyManager extends PolicyManager {
 
         // Get looks floor price of each collection from api
         console.log('Updating floor price for ' + tokens.length + ' collections');
-        await Promise.all(tokens.map(this.syncFloorPrice));
+        await Promise.all(tokens.map(t => this.syncFloorPrice(t)));
     }
 
     async syncFloorPrice(token) {
