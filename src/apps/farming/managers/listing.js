@@ -17,8 +17,6 @@ class ListingPolicyManager extends PolicyManager {
         this._req = looksRequests;
         this._floorPriceMutex = new Mutex();
         this._floorPrice = new Map();
-
-        this.syncFloorPrice = this.syncFloorPrice.bind(this);
     }
 
     async load() {
@@ -43,17 +41,24 @@ class ListingPolicyManager extends PolicyManager {
     async syncAllFloorPrices() {
         // Get unique collections
         const addresses = new Set();
-        const tokens = [];
+        const tasks = [];
         for (const policy of this._policies.values()) {
             if (policy.active && !addresses.has(policy.token.address)) {
                 addresses.add(policy.token.address);
-                tokens.push(policy.token);
+                tasks.push((async () => {
+                    try {
+                        await this.syncFloorPrice(policy.token);
+                    }
+                    catch (err) {
+                        console.log('Failed to sync floor price for ' + policy.token.address + ': ' + err.message);
+                    }
+                })());
             }
         }
 
         // Get looks floor price of each collection from api
-        console.log('Updating floor price for ' + tokens.length + ' collections');
-        await Promise.all(tokens.map(t => this.syncFloorPrice(t)));
+        console.log('Updating floor price for ' + tasks.length + ' collections');
+        await Promise.all(tasks);
     }
 
     async syncFloorPrice(token) {
