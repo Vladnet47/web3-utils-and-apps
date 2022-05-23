@@ -12,7 +12,7 @@ const IFACE = new ethers.utils.Interface([
 ]);
 
 class FarmingController {
-    constructor(provider, signerManager, cancelManager, listingManager, looksRequests, debug) {
+    constructor(provider, signerManager, cancelManager, listingManager, debug) {
         if (!provider) {
             throw new Error('Missing provider');
         }
@@ -25,15 +25,11 @@ class FarmingController {
         if (!listingManager) {
             throw new Error('Missing listing manager');
         }
-        if (!looksRequests) {
-            throw new Error('Missing looksrare requests module');
-        }
         this._debug = debug !== false;
         this._prov = provider;
         this._sm = signerManager;
         this._cm = cancelManager;
         this._lm = listingManager;
-        this._req = looksRequests;
         this._baseFee = null;
     }
 

@@ -15,7 +15,7 @@ async function main() {
     const looksRequests = new LooksRequests(true);
     const cancelManager = new CancelPolicyManager(signerManager, saveDir + (saveDir.endsWith('/') ? '' : '/') + 'cancel-policies.csv');
     const listingManager = new ListingPolicyManager(signerManager, saveDir + (saveDir.endsWith('/') ? '' : '/') + 'listing-policies.csv', looksRequests);
-    const farmingController = new FarmingController(prov, signerManager, cancelManager, looksRequests, debug);
+    const farmingController = new FarmingController(prov, signerManager, cancelManager, listingManager, debug);
 
     await looksRequests.load();
     await Promise.all([
