@@ -14,14 +14,14 @@ async function main() {
     const signerManager = new SignerManager(prov);
     const looksRequests = new LooksRequests(true);
     const cancelManager = new CancelPolicyManager(signerManager, saveDir + (saveDir.endsWith('/') ? '' : '/') + 'cancel-policies.csv');
-    const listingManager = new ListingPolicyManager(signerManager, saveDir + (saveDir.endsWith('/') ? '' : '/') + 'cancel-policies.csv', looksRequests);
+    const listingManager = new ListingPolicyManager(signerManager, saveDir + (saveDir.endsWith('/') ? '' : '/') + 'listing-policies.csv', looksRequests);
     const farmingController = new FarmingController(prov, signerManager, cancelManager, looksRequests, debug);
 
+    await looksRequests.load();
     await Promise.all([
         signerManager.load(),
         cancelManager.load(),
         listingManager.load(),
-        looksRequests.load(),
         farmingController.syncBaseFee(),
     ]);
     
@@ -30,6 +30,9 @@ async function main() {
 
     console.log('Starting farming controller in ' + (debug === false ? 'PROD' : 'DEBUG') + ' mode');
     await run(farmingController, signerManager);
+
+    setInterval(() => listingManager.syncAllListings(), 10000);
+    setInterval(() => listingManager.syncAllFloorPrices(), 180000);
 }
 
 async function run(farmingController, signerManager) {

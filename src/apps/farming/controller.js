@@ -59,6 +59,7 @@ class FarmingController {
             await this.syncBaseFee();
         }
 
+        const hash = saleTx.hash;
         const orders = this.parseTx(saleTx);
         if (orders.length === 0) {
             console.log(hash + ' is not a sale, skipping');
@@ -66,7 +67,6 @@ class FarmingController {
         }
 
         // Parse transaction
-        const hash = saleTx.hash;
         const maxFee = saleTx.maxFeePerGas || saleTx.gasPrice;
         const prioFee = saleTx.maxPriorityFeePerGas;
         const baseFee = this._baseFee;
