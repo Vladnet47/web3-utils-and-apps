@@ -86,26 +86,9 @@ class DiscordController {
 
             try {
                 switch (command) {
-                    case 'users': {
-                        const users = this._sm.names;
-                        let message = users[0];
-                        for (let i = 1; i < users.length; ++i) {
-                            message += ', ' + users[i];
-                        }
-                        cursor.reply(message || 'No users found');
-                        break;
-                    };
                     case 'policies': {
                         const user = args[1] ? args[1].toLowerCase() : null;
-                        let message;
-                        if (user) {
-                            const address = this._sm.getAddress(user);
-                            message = this._printPolicies(this._getAllPolicies(address));
-                        }
-                        else {
-                            message = this._printPolicies(this._getAllPolicies(user));
-                        }
-                        cursor.reply(message || 'No policies found');
+                        cursor.reply(user ? { embeds: [this._getUserPolicyEmbeds(user)] } : this._getAllPolicyEmbeds());
                         break;
                     }
                     case 'addcancel': {
@@ -118,9 +101,7 @@ class DiscordController {
                         }
                         await this._cm.addPolicy(new CancelPolicy(this._sm.getAddress(user), token, ethers.utils.parseEther(insurance)));
                         await this._cm.save();
-                        const address = this._sm.getAddress(user);
-                        const message = this._printPolicies(this._cm.policies.filter(p => p.user === address));
-                        cursor.reply('Successfully added cancel policy' + (message ? '\n' + message : ''));
+                        cursor.reply({ embeds: [this._getUserPolicyEmbeds(user)] });
                         break;
                     }
                     case 'removecancel': {
@@ -129,9 +110,7 @@ class DiscordController {
                         const token = new Token(args[2], args[3]);
                         await this._cm.removePolicy(token);
                         await this._cm.save();
-                        const address = this._sm.getAddress(user);
-                        const message = this._printPolicies(this._cm.policies.filter(p => p.user === address));
-                        cursor.reply('Successfully removed cancel policy' + (message ? '\n' + message : ''));
+                        cursor.reply({ embeds: [this._getUserPolicyEmbeds(user)] });
                         break;
                     }
                     case 'addlisting': {
@@ -142,9 +121,7 @@ class DiscordController {
                         const duration = args[5] ? parseInt(args[5]) * 1000 : null;
                         await this._lm.addPolicy(new ListingPolicy(this._sm.getAddress(user), token, percentage, duration));
                         await this._lm.save();
-                        const address = this._sm.getAddress(user);
-                        const message = this._printPolicies(this._lm.policies.filter(p => p.user === address));
-                        cursor.reply('Successfully added listing policy' + (message ? '\n' + message : ''));
+                        cursor.reply({ embeds: [this._getUserPolicyEmbeds(user)] });
                         break;
                     }
                     case 'removelisting': {
@@ -153,9 +130,7 @@ class DiscordController {
                         const token = new Token(args[2], args[3]);
                         await this._lm.removePolicy(token);
                         await this._lm.save();
-                        const address = this._sm.getAddress(user);
-                        const message = this._printPolicies(this._lm.policies.filter(p => p.user === address));
-                        cursor.reply('Successfully removed listing policy' + (message ? '\n' + message : ''));
+                        cursor.reply({ embeds: [this._getUserPolicyEmbeds(user)] });
                         break;
                     }
                     case 'estop': {
@@ -184,7 +159,6 @@ class DiscordController {
 
     _printUsage() {
         return 'Usage:\n' +
-        '  users\n' +
         '  policies <user>\n' +
         '  addCancel <user> <tokenContract> <tokenId> <insurance (eth)>\n' +
         '  removeCancel <user> <tokenContract> <tokenId>\n' +
@@ -193,54 +167,63 @@ class DiscordController {
         '  estop';
     }
 
-    _getAllPolicies(user) {
-        const policies = (() => {
-            if (user) {
-                return [...this._cm.policies, ...this._lm.policies].filter(p => p.user === user);
-            }
-            else {
-                return [...this._cm.policies, ...this._lm.policies];
-            }
-        })();
-
-        return policies.sort((a, b) => {
-            const order = (a.user + a.token.address).localeCompare(b.user + b.token.address);
-            if (order === 0) {
-                return a.token.id - b.token.id;
-            }
-            else {
-                return order;
-            }
-        });
+    _getAllPolicyEmbeds() {
+        return {
+            embeds: this._sm.names.map(u => this._getUserPolicyEmbeds(u))
+        };
     }
 
-    _printPolicies(policies) {
-        if (policies.length > 0) {
-            const formatPolicy = p => {
-                const name = this._sm.getName(p.user);
-                let res = name + ' ' + p.token.address + ' ' + p.token.id;
-                if (p instanceof CancelPolicy) {
-                    return '[CANCEL] ' + res + ' ' + '[insured for ' + ethers.utils.formatEther(p.insurance) + 'Ξ] [' + (p.active ? 'ACTIVE' : 'INACTIVE') + ']';
-                }
-                else if (p instanceof ListingPolicy) {
-                    return '[LISTING] ' + res + ' ' + 
-                        '[perc=' + p.targetPercentage + '%] ' +
-                        '[duration=' + (p.targetDuration / 1000) + 's] ' + 
-                        '[price=' + (p.price ? ethers.utils.formatEther(p.price) : 'none') + '] ' + 
-                        '[' + (p.active ? 'ACTIVE' : 'INACTIVE') + ']';
-                }
-                else {
-                    throw new Error('Invalid policy type');
-                }
-            }
-            let str = formatPolicy(policies[0]);
-            for (let i = 1; i < policies.length; ++i) {
-                str += '\n' + formatPolicy(policies[i]);
-            }
-            return str;
+    _getUserPolicyEmbeds(user) {
+        if (!user) {
+            throw new Error('Missing user');
+        }
+        const address = this._sm.getAddress(user);
+
+        const cmPolicies = this._cm.policies.filter(p => p.user === address);
+        let cmStr = '';
+        for (const p of cmPolicies) {
+            cmStr += '[**' + p.token.id + ' (...' + p.token.address.substring(p.token.address.length - 4) + ')**]' + 
+                '(https://looksrare.org/collections/' + p.token.address + '/' + p.token.id + ') ' +
+                '[ins=' + ethers.utils.formatEther(p.insurance) + 'Ξ]\n';
         }
 
-        return '';
+        const lmPolicies = this._lm.policies.filter(p => p.user === address);
+        let lmStr = '';
+        for (const p of lmPolicies) {
+            lmStr += '[**' + p.token.id + ' (...' + p.token.address.substring(p.token.address.length - 4) + ')**]' + 
+                '(https://looksrare.org/collections/' + p.token.address + '/' + p.token.id + ') ' +
+                '[per=' + p.targetPercentage + '%] ' +
+                '[dur=' + (p.targetDuration / 1000 / 60) + 'min] ' + 
+                '[price=' + (p.price ? ethers.utils.formatEther(p.price) + 'Ξ' : '') + ']\n'
+        }
+
+        const fields = [];
+        if (cmStr) {
+            fields.push({
+                name: 'Auto-Cancels',
+                value: cmStr,
+                inline: false,
+            });
+        }
+        if (lmStr) {
+            fields.push({
+                name: 'Auto-Listings',
+                value: lmStr,
+                inline: false
+            });
+        }
+
+        const embed = {
+            color: 0x0099ff,
+            title: user.toLowerCase(),
+            url: 'https://looksrare.org/accounts/' + address,
+        };
+
+        if (fields.length > 0) {
+            embed.fields = fields;
+        }
+
+        return embed;
     }
 
     async stop() {
